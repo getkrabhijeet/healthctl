@@ -1,0 +1,5 @@
+1. Get status of all pods in rook
+2. Get cluster status
+3. Get disk status
+4. Get ceph status 
+5. Use rook's api to fetch health of cluster that the dashboard uses.
