@@ -6,6 +6,8 @@ import (
 	"log"
 	"strings"
 
+	"healthctl/pkg/k8s"
+
 	"github.com/rivo/tview"
 )
 
@@ -37,19 +39,19 @@ func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
 	pages := tview.NewPages()
 
+	//kc := k8s.NewK8sClient()
+	clusterList := getClusterList()
+	for index, _ := range k8s.GetClustersFromKubeConfig() {
+		clusterList.AddItem(fmt.Sprintf("%s", index), "", 'x', nil)
+	}
+
 	infoUI := createInfoPanel(app)
 	logPanel := createTextViewPanel(app, "Log")
 
 	log.SetOutput(logPanel)
 
-	clusterList := getClusterList()
 	// the clusterList here will be retreived from KubeConfig command.
 	// For test purpose, this is hardcoded now.
-
-	clusterList.AddItem("Cluster 1", "", '1', nil)
-	clusterList.AddItem("Cluster 2", "", '2', nil)
-	clusterList.AddItem("Cluster 3", "", '3', nil)
-	clusterList.AddItem("Cluster 4", "", '4', nil)
 
 	commandList := createCommandList()
 	commandList.AddItem("K8s Sanity", "", 'k', sendCommand(pages, infoUI))
@@ -80,11 +82,10 @@ func createApplication() (app *tview.Application) {
 func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tview.Primitive) (layout *tview.Flex) {
 	///// Main Layout /////
 	banner := tview.NewTextView()
-	banner.SetBorder(true)
-	banner.SetText(strings.Join(Logo, fmt.Sprintf("\n[%s::b]", "green")))
-	banner.SetTextAlign(tview.AlignLeft)
+	banner.SetBorder(false)
+	banner.SetText(strings.Join(Logo, fmt.Sprintf("\n[%s::r]", "green")))
 	banner.SetDynamicColors(true)
-	banner.SetTextAlign(tview.AlignCenter)
+	banner.SetTextAlign(tview.AlignRight)
 
 	mainLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(clusterList, 0, 30, true).
@@ -97,9 +98,9 @@ func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tvi
 	info.SetTextAlign(tview.AlignCenter)
 
 	layout = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(banner, 13, 1, false).
-		AddItem(mainLayout, 20, 30, true).
-		AddItem(info, 0, 1, false)
+		AddItem(banner, 11, 0, false).
+		AddItem(mainLayout, 0, 20, true).
+		AddItem(info, 3, 1, false)
 
 	return layout
 }
@@ -222,6 +223,35 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 }
 
 func main() {
+
+	kc, error := k8s.NewK8sClient()
+	if error != nil {
+		panic(error)
+	}
+	t := k8s.TestStatus{}
+
+	t = kc.CheckNodes()
+	fmt.Printf("Status of Worker nodes : %t\n", t.Status)
+	if t.Status == false {
+		fmt.Printf("DEBUG: %s, Error: %s", t.Info, t.Error)
+	}
+
+	t = kc.CheckPods()
+	fmt.Printf("Status of Pods : %t\n", t.Status)
+	if t.Status == false {
+		fmt.Printf("DEBUG: %s\n", t.Info)
+	}
+
+	// for cluster := range k8s.GetClustersFromKubeConfig() {
+	// 	fmt.Printf("Cluster: %s\n", cluster)
+	// }
+
+	t = kc.CheckEvents()
+	fmt.Printf("Status of Events : %t\n", t.Status)
+	if t.Status == false {
+		fmt.Printf("DEBUG: %s\n", t.Info)
+	}
+
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
