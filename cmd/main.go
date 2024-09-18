@@ -348,6 +348,25 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 }
 
 func main() {
+	// kc, _ := k8s.NewK8sClient()
+	// r := []paas.ResourceCheck{
+	// 	paas.CheckGrafana(kc.Client),
+	// 	paas.CheckPrometheus(kc.Client),
+	// 	paas.CheckKibana(kc.Client),
+	// 	paas.CheckElastic(kc.Client),
+	// 	paas.CheckJaeger(kc.Client),
+	// 	paas.CheckKiali(kc.Client),
+	// 	paas.CheckIstio(kc.Client),
+	// 	paas.CheckDbEtcd(kc.Client),
+	// 	paas.CheckKubeProm(kc.Client),
+	// 	paas.CheckRedisOperator(kc.Client),
+	// 	paas.CheckRedisCluster(kc.Client),
+	// 	paas.CheckElastAlert(kc.Client),
+	// 	paas.CheckAlerta(kc.Client),
+	// }
+
+	// paas.PrintResults(r)
+
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
