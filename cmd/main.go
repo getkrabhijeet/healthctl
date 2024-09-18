@@ -155,38 +155,38 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	commands.SetCellSimple(0, 0, "Run Tests : ")
 	commands.GetCell(0, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Context = tview.NewTableCell("none")
-	commands.SetCell(0, 1, tview.NewTableCell("none"))
+	commands.SetCell(0, 1, tview.NewTableCell("ctrl+r"))
 
-	commands.SetCellSimple(1, 0, "Open reports : ")
+	commands.SetCellSimple(1, 0, "Stop Tests :  ")
 	commands.GetCell(1, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Cluster = tview.NewTableCell("none")
-	commands.SetCell(1, 1, tview.NewTableCell("none"))
+	commands.SetCell(1, 1, tview.NewTableCell("ctrl+s"))
 
-	commands.SetCellSimple(2, 0, "Stop Tests : ")
+	commands.SetCellSimple(2, 0, "Open Reports : ")
 	commands.GetCell(2, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Nodes = tview.NewTableCell("none")
-	commands.SetCell(2, 1, tview.NewTableCell("none"))
+	commands.SetCell(2, 1, tview.NewTableCell("ctrl+o"))
 
 	commands.SetCellSimple(3, 0, "View Topology : ")
 	commands.GetCell(3, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
-	commands.SetCell(3, 1, tview.NewTableCell("none"))
+	commands.SetCell(3, 1, tview.NewTableCell("ctrl+t"))
 
-	commands.SetCellSimple(4, 0, "Heatmap : ")
+	commands.SetCellSimple(4, 0, "Popeye : ")
 	commands.GetCell(4, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
-	commands.SetCell(4, 1, tview.NewTableCell("none"))
+	commands.SetCell(4, 1, tview.NewTableCell("ctrl+p"))
 
-	commands.SetCellSimple(5, 0, "Chatbot : ")
+	commands.SetCellSimple(5, 0, "SecurityContexts : ")
 	commands.GetCell(5, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
 	commands.SetCell(5, 1, tview.NewTableCell("none"))
 
 	banner := tview.NewTable()
-	banner.SetBorder(true)
+	banner.SetBorder(false)
 	for i := 0; i < 7; i++ {
-		banner.SetCell(i, 0, tview.NewTableCell(Logo1[i]))
-		banner.GetCell(i, 0).SetAlign(tview.AlignRight).SetBackgroundColor(tcell.ColorGreen)
+		banner.SetCell(i+1, 0, tview.NewTableCell(Logo1[i]))
+		banner.GetCell(i+1, 0).SetAlign(tview.AlignRight).SetBackgroundColor(tcell.ColorGreen)
 	}
 
 	mainLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
@@ -348,34 +348,24 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 }
 
 func main() {
-
-	// kc, error := k8s.NewK8sClient()
-	// if error != nil {
-	// 	panic(error)
-	// }
-	// t := k8s.TestStatus{}
-
-	// t = kc.CheckNodes()
-	// fmt.Printf("Status of Worker nodes : %t\n", t.Status)
-	// if t.Status == false {
-	// 	fmt.Printf("DEBUG: %s, Error: %s", t.Info, t.Error)
-	// }
-
-	// t = kc.CheckPods()
-	// fmt.Printf("Status of Pods : %t\n", t.Status)
-	// if t.Status == false {
-	// 	fmt.Printf("DEBUG: %s\n", t.Info)
+	// kc, _ := k8s.NewK8sClient()
+	// r := []paas.ResourceCheck{
+	// 	paas.CheckGrafana(kc.Client),
+	// 	paas.CheckPrometheus(kc.Client),
+	// 	paas.CheckKibana(kc.Client),
+	// 	paas.CheckElastic(kc.Client),
+	// 	paas.CheckJaeger(kc.Client),
+	// 	paas.CheckKiali(kc.Client),
+	// 	paas.CheckIstio(kc.Client),
+	// 	paas.CheckDbEtcd(kc.Client),
+	// 	paas.CheckKubeProm(kc.Client),
+	// 	paas.CheckRedisOperator(kc.Client),
+	// 	paas.CheckRedisCluster(kc.Client),
+	// 	paas.CheckElastAlert(kc.Client),
+	// 	paas.CheckAlerta(kc.Client),
 	// }
 
-	// // for cluster := range k8s.GetClustersFromKubeConfig() {
-	// // 	fmt.Printf("Cluster: %s\n", cluster)
-	// // }
-
-	// t = kc.CheckEvents()
-	// fmt.Printf("Status of Events : %t\n", t.Status)
-	// if t.Status == false {
-	// 	fmt.Printf("DEBUG: %s\n", t.Info)
-	// }
+	// paas.PrintResults(r)
 
 	app := createApplication()
 
