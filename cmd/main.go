@@ -9,7 +9,6 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 type testInfoUI struct {
@@ -42,22 +41,6 @@ var Logo1 = []string{
 	`                                         `,
 }
 
-func updateClusterMetadata(pages *tview.Pages, infoUI *testInfoUI, kc *k8s.K8sClient, config *clientcmdapi.Config, index string) func() {
-	return func() {
-		//set current context with the context that matches recived index cluster
-		kc.SetContext(config, index)
-
-		infoUI.context.SetText(config.CurrentContext)
-
-		infoUI.cluster.SetText(index)
-
-		nodes := kc.GetClusterNodes()
-
-		infoUI.nodes.SetText(fmt.Sprintf("Master: %d, Worker: %d", nodes[0], nodes[1]))
-		infoUI.apiserver.SetText(config.Clusters[index].Server)
-		pages.SwitchToPage("main")
-	}
-}
 func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
 	pages := tview.NewPages()
@@ -71,8 +54,18 @@ func createApplication() (app *tview.Application) {
 	clusterList := getClusterList()
 	config := k8s.GetClustersFromKubeConfig()
 	for index, _ := range config.Clusters {
-		clusterList.AddItem(fmt.Sprintf("%s", index), "", 'x', updateClusterMetadata(pages, infoUI, kc, config, index))
+		clusterList.AddItem(index, "", 0, nil)
 	}
+	handler := func(index int, mainText, secondaryText string, shortcut rune) {
+		kc.SetContext(config, mainText)
+		infoUI.context.SetText(config.CurrentContext)
+		infoUI.cluster.SetText(mainText)
+		nodes := kc.GetClusterNodes()
+		infoUI.nodes.SetText(fmt.Sprintf("Master: %d, Worker: %d", nodes[0], nodes[1]))
+		infoUI.apiserver.SetText(config.Clusters[mainText].Server)
+		pages.SwitchToPage("main")
+	}
+	clusterList.SetChangedFunc(handler)
 
 	commandList := createCommandList()
 	commandList.AddItem("K8s Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
@@ -137,22 +130,22 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	metadata.SetBorder(true).SetTitle("Cluster Details")
 
 	metadata.SetCellSimple(0, 0, "Context : ")
-	metadata.GetCell(0, 0).SetAlign(tview.AlignRight)
+	metadata.GetCell(0, 0).SetAlign(tview.AlignLeft)
 	infoUI.context = tview.NewTableCell("none")
 	metadata.SetCell(0, 1, infoUI.context)
 
 	metadata.SetCellSimple(1, 0, "Cluster : ")
-	metadata.GetCell(1, 0).SetAlign(tview.AlignRight)
+	metadata.GetCell(1, 0).SetAlign(tview.AlignLeft)
 	infoUI.cluster = tview.NewTableCell("none")
 	metadata.SetCell(1, 1, infoUI.cluster)
 
 	metadata.SetCellSimple(2, 0, "Nodes : ")
-	metadata.GetCell(2, 0).SetAlign(tview.AlignRight)
+	metadata.GetCell(2, 0).SetAlign(tview.AlignLeft)
 	infoUI.nodes = tview.NewTableCell("Master : 0, Worker : 0")
 	metadata.SetCell(2, 1, infoUI.nodes)
 
 	metadata.SetCellSimple(3, 0, "apiserver : ")
-	metadata.GetCell(3, 0).SetAlign(tview.AlignRight)
+	metadata.GetCell(3, 0).SetAlign(tview.AlignLeft)
 	infoUI.apiserver = tview.NewTableCell("0")
 	metadata.SetCell(3, 1, infoUI.apiserver)
 
@@ -160,32 +153,32 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	commands.SetBorder(true).SetTitle("Shortcuts")
 
 	commands.SetCellSimple(0, 0, "Run Tests : ")
-	commands.GetCell(0, 0).SetAlign(tview.AlignRight)
+	commands.GetCell(0, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Context = tview.NewTableCell("none")
 	commands.SetCell(0, 1, tview.NewTableCell("none"))
 
 	commands.SetCellSimple(1, 0, "Open reports : ")
-	commands.GetCell(1, 0).SetAlign(tview.AlignRight)
+	commands.GetCell(1, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Cluster = tview.NewTableCell("none")
 	commands.SetCell(1, 1, tview.NewTableCell("none"))
 
 	commands.SetCellSimple(2, 0, "Stop Tests : ")
-	commands.GetCell(2, 0).SetAlign(tview.AlignRight)
+	commands.GetCell(2, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Nodes = tview.NewTableCell("none")
 	commands.SetCell(2, 1, tview.NewTableCell("none"))
 
 	commands.SetCellSimple(3, 0, "View Topology : ")
-	commands.GetCell(3, 0).SetAlign(tview.AlignRight)
+	commands.GetCell(3, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
 	commands.SetCell(3, 1, tview.NewTableCell("none"))
 
 	commands.SetCellSimple(4, 0, "Heatmap : ")
-	commands.GetCell(4, 0).SetAlign(tview.AlignRight)
+	commands.GetCell(4, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
 	commands.SetCell(4, 1, tview.NewTableCell("none"))
 
 	commands.SetCellSimple(5, 0, "Chatbot : ")
-	commands.GetCell(5, 0).SetAlign(tview.AlignRight)
+	commands.GetCell(5, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
 	commands.SetCell(5, 1, tview.NewTableCell("none"))
 
