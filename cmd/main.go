@@ -81,9 +81,9 @@ func createApplication() (app *tview.Application) {
 	})
 
 	reportList := createReportList()
-	reportList.AddItem("2024-17-09", "", 0, nil)
-	reportList.AddItem("2024-16-09", "", 0, nil)
-	reportList.AddItem("2024-15-09", "", 0, nil)
+	// reportList.AddItem("2024-17-09", "", 0, nil)
+	// reportList.AddItem("2024-16-09", "", 0, nil)
+	// reportList.AddItem("2024-15-09", "", 0, nil)
 
 	// Set focus navigation
 	clusterList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -98,11 +98,11 @@ func createApplication() (app *tview.Application) {
 	commandList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTab:
-			app.SetFocus(reportList)
-			return nil
-		case tcell.KeyBacktab:
 			app.SetFocus(clusterList)
 			return nil
+			// case tcell.KeyBacktab:
+			// 	app.SetFocus(clusterList)
+			// 	return nil
 		}
 		return event
 	})
@@ -190,8 +190,8 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	}
 
 	mainLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(clusterList, 0, 30, true).
-		AddItem(commandList, 0, 30, true).
+		AddItem(clusterList, 30, 0, true).
+		AddItem(commandList, 30, 0, true).
 		AddItem(reportsPanel, 0, 30, false)
 
 	info := tview.NewTextView()
@@ -203,7 +203,7 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 		SetDirection(tview.FlexColumn).
 		AddItem(metadata, 0, 1, false).
 		AddItem(commands, 0, 1, false).
-		AddItem(banner, 0, 1, false)
+		AddItem(banner, 43, 1, false)
 
 	mainMenu := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -331,7 +331,7 @@ func getClusterList() (clusterList *tview.List) {
 func createReportList() (reportList *tview.List) {
 	///// Reports /////
 	reportList = tview.NewList()
-	reportList.SetBorder(true).SetTitle("Reports")
+	reportList.SetBorder(true).SetTitle("Test Results")
 	reportList.ShowSecondaryText(false)
 	return reportList
 }
