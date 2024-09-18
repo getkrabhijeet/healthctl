@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
+
+	"healthctl/pkg/k8s"
 
 	"github.com/gdamore/tcell/v2"
-	"healthctl/pkg/k8s"
 	"github.com/rivo/tview"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 type testInfoUI struct {
@@ -18,6 +19,10 @@ type testInfoUI struct {
 	panel     *tview.Flex
 	testType  *tview.TextView
 	txAddress *tview.TableCell
+	cluster   *tview.TableCell
+	context   *tview.TableCell
+	nodes     *tview.TableCell
+	apiserver *tview.TableCell
 }
 
 var Logo = []string{
@@ -26,21 +31,48 @@ var Logo = []string{
 	`┛┗┗ ┗┻┗┗┛┗┗┗┗`,
 }
 
+var Logo1 = []string{
+
+	` _                _ _   _          _   _ `,
+	`| |              | | | | |        | | | |`,
+	`| |__   ___  __ _| | |_| |__   ___| |_| |`,
+	`| '_ \ / _ \/ _' | | __| '_ \ / __| __| |`,
+	`| | | |  __/ (_| | | |_| | | | (__| |_| |`,
+	`|_| |_|\___|\__,_|_|\__|_| |_|\___|\__|_|`,
+	`                                         `,
+}
+
+func updateClusterMetadata(pages *tview.Pages, infoUI *testInfoUI, kc *k8s.K8sClient, config *clientcmdapi.Config, index string) func() {
+	return func() {
+		//set current context with the context that matches recived index cluster
+		kc.SetContext(config, index)
+
+		infoUI.context.SetText(config.CurrentContext)
+
+		infoUI.cluster.SetText(index)
+
+		nodes := kc.GetClusterNodes()
+
+		infoUI.nodes.SetText(fmt.Sprintf("Master: %d, Worker: %d", nodes[0], nodes[1]))
+		infoUI.apiserver.SetText(config.Clusters[index].Server)
+		pages.SwitchToPage("main")
+	}
+}
 func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
 	pages := tview.NewPages()
-
-	//kc := k8s.NewK8sClient()
-	clusterList := getClusterList()
-	for index, _ := range k8s.GetClustersFromKubeConfig() {
-		clusterList.AddItem(fmt.Sprintf("%s", index), "", 'x', nil)
-	}
-
 	infoUI := createInfoPanel(app)
 	logPanel := createTextViewPanel(app, "Log")
 
 	log.SetOutput(logPanel)
 
+	kc, _ := k8s.NewK8sClient()
+	kc.GetClusterInfo()
+	clusterList := getClusterList()
+	config := k8s.GetClustersFromKubeConfig()
+	for index, _ := range config.Clusters {
+		clusterList.AddItem(fmt.Sprintf("%s", index), "", 'x', updateClusterMetadata(pages, infoUI, kc, config, index))
+	}
 
 	commandList := createCommandList()
 	commandList.AddItem("K8s Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
@@ -91,7 +123,7 @@ func createApplication() (app *tview.Application) {
 		return event
 	})
 
-	layout := createMainLayout(clusterList, commandList, reportList)
+	layout := createMainLayout(infoUI, clusterList, commandList, reportList)
 	pages.AddPage("main", layout, true, true)
 
 	app.SetRoot(pages, true)
@@ -99,13 +131,70 @@ func createApplication() (app *tview.Application) {
 	return app
 }
 
-func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tview.Primitive) (layout *tview.Flex) {
+func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primitive, reportsPanel tview.Primitive) (layout *tview.Flex) {
 	///// Main Layout /////
-	banner := tview.NewTextView()
+	metadata := tview.NewTable()
+	metadata.SetBorder(true).SetTitle("Cluster Details")
+
+	metadata.SetCellSimple(0, 0, "Context : ")
+	metadata.GetCell(0, 0).SetAlign(tview.AlignRight)
+	infoUI.context = tview.NewTableCell("none")
+	metadata.SetCell(0, 1, infoUI.context)
+
+	metadata.SetCellSimple(1, 0, "Cluster : ")
+	metadata.GetCell(1, 0).SetAlign(tview.AlignRight)
+	infoUI.cluster = tview.NewTableCell("none")
+	metadata.SetCell(1, 1, infoUI.cluster)
+
+	metadata.SetCellSimple(2, 0, "Nodes : ")
+	metadata.GetCell(2, 0).SetAlign(tview.AlignRight)
+	infoUI.nodes = tview.NewTableCell("Master : 0, Worker : 0")
+	metadata.SetCell(2, 1, infoUI.nodes)
+
+	metadata.SetCellSimple(3, 0, "apiserver : ")
+	metadata.GetCell(3, 0).SetAlign(tview.AlignRight)
+	infoUI.apiserver = tview.NewTableCell("0")
+	metadata.SetCell(3, 1, infoUI.apiserver)
+
+	commands := tview.NewTable()
+	commands.SetBorder(true).SetTitle("Shortcuts")
+
+	commands.SetCellSimple(0, 0, "Run Tests : ")
+	commands.GetCell(0, 0).SetAlign(tview.AlignRight)
+	//infoUI.Context = tview.NewTableCell("none")
+	commands.SetCell(0, 1, tview.NewTableCell("none"))
+
+	commands.SetCellSimple(1, 0, "Open reports : ")
+	commands.GetCell(1, 0).SetAlign(tview.AlignRight)
+	//infoUI.Cluster = tview.NewTableCell("none")
+	commands.SetCell(1, 1, tview.NewTableCell("none"))
+
+	commands.SetCellSimple(2, 0, "Stop Tests : ")
+	commands.GetCell(2, 0).SetAlign(tview.AlignRight)
+	//infoUI.Nodes = tview.NewTableCell("none")
+	commands.SetCell(2, 1, tview.NewTableCell("none"))
+
+	commands.SetCellSimple(3, 0, "View Topology : ")
+	commands.GetCell(3, 0).SetAlign(tview.AlignRight)
+	//infoUI.Pods = tview.NewTableCell("none")
+	commands.SetCell(3, 1, tview.NewTableCell("none"))
+
+	commands.SetCellSimple(4, 0, "Heatmap : ")
+	commands.GetCell(4, 0).SetAlign(tview.AlignRight)
+	//infoUI.Pods = tview.NewTableCell("none")
+	commands.SetCell(4, 1, tview.NewTableCell("none"))
+
+	commands.SetCellSimple(5, 0, "Chatbot : ")
+	commands.GetCell(5, 0).SetAlign(tview.AlignRight)
+	//infoUI.Pods = tview.NewTableCell("none")
+	commands.SetCell(5, 1, tview.NewTableCell("none"))
+
+	banner := tview.NewTable()
 	banner.SetBorder(true)
-	banner.SetText(strings.Join(Logo, fmt.Sprintf("\n[%s::b]", "green")))
-	banner.SetTextAlign(tview.AlignRight)
-	banner.SetDynamicColors(true)
+	for i := 0; i < 7; i++ {
+		banner.SetCell(i, 0, tview.NewTableCell(Logo1[i]))
+		banner.GetCell(i, 0).SetAlign(tview.AlignRight).SetBackgroundColor(tcell.ColorGreen)
+	}
 
 	mainLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(clusterList, 0, 30, true).
@@ -117,10 +206,25 @@ func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tvi
 	info.SetText("HealthCtl v1.0 - Copyright 2024 Microsoft Corp")
 	info.SetTextAlign(tview.AlignCenter)
 
-	layout = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(banner, 0, 15, false).
-		AddItem(mainLayout, 0, 80, true).
-		AddItem(info, 0, 5, false)
+	header := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(metadata, 0, 1, false).
+		AddItem(commands, 0, 1, false).
+		AddItem(banner, 0, 1, false)
+
+	mainMenu := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(mainLayout, 0, 80, true)
+
+	footer := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(info, 0, 1, false)
+
+	layout = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(header, 9, 1, false).
+		AddItem(mainMenu, 0, 1, true).
+		AddItem(footer, 3, 1, false)
 
 	return layout
 }
@@ -252,33 +356,33 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 
 func main() {
 
-	kc, error := k8s.NewK8sClient()
-	if error != nil {
-		panic(error)
-	}
-	t := k8s.TestStatus{}
+	// kc, error := k8s.NewK8sClient()
+	// if error != nil {
+	// 	panic(error)
+	// }
+	// t := k8s.TestStatus{}
 
-	t = kc.CheckNodes()
-	fmt.Printf("Status of Worker nodes : %t\n", t.Status)
-	if t.Status == false {
-		fmt.Printf("DEBUG: %s, Error: %s", t.Info, t.Error)
-	}
-
-	t = kc.CheckPods()
-	fmt.Printf("Status of Pods : %t\n", t.Status)
-	if t.Status == false {
-		fmt.Printf("DEBUG: %s\n", t.Info)
-	}
-
-	// for cluster := range k8s.GetClustersFromKubeConfig() {
-	// 	fmt.Printf("Cluster: %s\n", cluster)
+	// t = kc.CheckNodes()
+	// fmt.Printf("Status of Worker nodes : %t\n", t.Status)
+	// if t.Status == false {
+	// 	fmt.Printf("DEBUG: %s, Error: %s", t.Info, t.Error)
 	// }
 
-	t = kc.CheckEvents()
-	fmt.Printf("Status of Events : %t\n", t.Status)
-	if t.Status == false {
-		fmt.Printf("DEBUG: %s\n", t.Info)
-	}
+	// t = kc.CheckPods()
+	// fmt.Printf("Status of Pods : %t\n", t.Status)
+	// if t.Status == false {
+	// 	fmt.Printf("DEBUG: %s\n", t.Info)
+	// }
+
+	// // for cluster := range k8s.GetClustersFromKubeConfig() {
+	// // 	fmt.Printf("Cluster: %s\n", cluster)
+	// // }
+
+	// t = kc.CheckEvents()
+	// fmt.Printf("Status of Events : %t\n", t.Status)
+	// if t.Status == false {
+	// 	fmt.Printf("DEBUG: %s\n", t.Info)
+	// }
 
 	app := createApplication()
 
