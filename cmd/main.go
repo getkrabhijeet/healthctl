@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/gdamore/tcell/v2"
 	"healthctl/pkg/k8s"
-
 	"github.com/rivo/tview"
 )
 
@@ -21,18 +21,9 @@ type testInfoUI struct {
 }
 
 var Logo = []string{
-
-	`.----------------.  .----------------.  .----------------.  .----------------.  .----------------.  .----------------.  .----------------.  .----------------.  .----------------. `,
-	`| .--------------. || .--------------. || .--------------. || .--------------. || .--------------. || .--------------. || .--------------. || .--------------. || .--------------. |`,
-	`| |  ____  ____  | || |  _________   | || |      __      | || |   _____      | || |  _________   | || |  ____  ____  | || |     ______   | || |  _________   | || |   _____      | |`,
-	`| | |_   ||   _| | || | |_   ___  |  | || |     /  \     | || |  |_   _|     | || | |  _   _  |  | || | |_   ||   _| | || |   .' ___  |  | || | |  _   _  |  | || |  |_   _|     | |`,
-	`| |   | |__| |   | || |   | |_  \_|  | || |    / /\ \    | || |    | |       | || | |_/ | | \_|  | || |   | |__| |   | || |  / .'   \_|  | || | |_/ | | \_|  | || |    | |       | |`,
-	`| |   |  __  |   | || |   |  _|  _   | || |   / ____ \   | || |    | |   _   | || |     | |      | || |   |  __  |   | || |  | |         | || |     | |      | || |    | |   _   | |`,
-	`| |  _| |  | |_  | || |  _| |___/ |  | || | _/ /    \ \_ | || |   _| |__/ |  | || |    _| |_     | || |  _| |  | |_  | || |  \ '.___ '\  | || |    _| |_     | || |   _| |__/ |  | |`,
-	`| | |____||____| | || | |_________|  | || ||____|  |____|| || |  |________|  | || |   |_____|    | || | |____||____| | || |   '._____.'  | || |   |_____|    | || |  |________|  | |`,
-	`| |              | || |              | || |              | || |              | || |              | || |              | || |              | || |              | || |              | |`,
-	`| '--------------' || '--------------' || '--------------' || '--------------' || '--------------' || '--------------' || '--------------' || '--------------' || '--------------' |`,
-	` '----------------'  '----------------'  '----------------'  '----------------'  '----------------'  '----------------'  '----------------'  '----------------'  '----------------' `,
+	`┓     ┓ ┓   ┓`,
+	`┣┓┏┓┏┓┃╋┣┓┏╋┃`,
+	`┛┗┗ ┗┻┗┗┛┗┗┗┗`,
 }
 
 func createApplication() (app *tview.Application) {
@@ -50,17 +41,15 @@ func createApplication() (app *tview.Application) {
 
 	log.SetOutput(logPanel)
 
-	// the clusterList here will be retreived from KubeConfig command.
-	// For test purpose, this is hardcoded now.
 
 	commandList := createCommandList()
-	commandList.AddItem("K8s Sanity", "", 'k', sendCommand(pages, infoUI))
-	commandList.AddItem("Infra Sanity", "", 'i', sendCommand(pages, infoUI))
-	commandList.AddItem("PAAS Sanity", "", 'p', sendCommand(pages, infoUI))
-	commandList.AddItem("SMF Sanity", "", 'a', sendCommand(pages, infoUI))
-	commandList.AddItem("UPF Sanity", "", 'u', sendCommand(pages, infoUI))
-	commandList.AddItem("Storage Analysis", "", 's', sendCommand(pages, infoUI))
-	commandList.AddItem("Netpol Scan", "", 'n', sendCommand(pages, infoUI))
+	commandList.AddItem("K8s Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	commandList.AddItem("Infra Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	commandList.AddItem("PAAS Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	commandList.AddItem("SMF Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	commandList.AddItem("UPF Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	commandList.AddItem("Storage Analysis", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	commandList.AddItem("Netpol Scan", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("Stop", "", 's', stop(infoUI))
 	commandList.AddItem("Quit", "", 'q', func() {
 		app.Stop()
@@ -70,6 +59,37 @@ func createApplication() (app *tview.Application) {
 	reportList.AddItem("2024-17-09", "", 0, nil)
 	reportList.AddItem("2024-16-09", "", 0, nil)
 	reportList.AddItem("2024-15-09", "", 0, nil)
+
+	// Set focus navigation
+	clusterList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			app.SetFocus(commandList)
+			return nil
+		}
+		return event
+	})
+
+	commandList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			app.SetFocus(reportList)
+			return nil
+		case tcell.KeyBacktab:
+			app.SetFocus(clusterList)
+			return nil
+		}
+		return event
+	})
+
+	reportList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyBacktab:
+			app.SetFocus(commandList)
+			return nil
+		}
+		return event
+	})
 
 	layout := createMainLayout(clusterList, commandList, reportList)
 	pages.AddPage("main", layout, true, true)
@@ -82,10 +102,10 @@ func createApplication() (app *tview.Application) {
 func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tview.Primitive) (layout *tview.Flex) {
 	///// Main Layout /////
 	banner := tview.NewTextView()
-	banner.SetBorder(false)
-	banner.SetText(strings.Join(Logo, fmt.Sprintf("\n[%s::r]", "green")))
-	banner.SetDynamicColors(true)
+	banner.SetBorder(true)
+	banner.SetText(strings.Join(Logo, fmt.Sprintf("\n[%s::b]", "green")))
 	banner.SetTextAlign(tview.AlignRight)
+	banner.SetDynamicColors(true)
 
 	mainLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(clusterList, 0, 30, true).
@@ -98,14 +118,14 @@ func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tvi
 	info.SetTextAlign(tview.AlignCenter)
 
 	layout = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(banner, 11, 0, false).
-		AddItem(mainLayout, 0, 20, true).
-		AddItem(info, 3, 1, false)
+		AddItem(banner, 0, 15, false).
+		AddItem(mainLayout, 0, 80, true).
+		AddItem(info, 0, 5, false)
 
 	return layout
 }
 
-func sendCommand(pages *tview.Pages, infoUI *testInfoUI) func() {
+func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List, commandList *tview.List) func() {
 	return func() {
 		startFunc := func() {
 			stop(infoUI)()
@@ -129,14 +149,22 @@ func sendCommand(pages *tview.Pages, infoUI *testInfoUI) func() {
 		}
 
 		form := tview.NewForm()
-		form.AddButton("Start", startFunc)
+		form.AddButton("Start", func() {
+			startFunc()
+		})
 		form.AddButton("Cancel", cancelFunc)
 		form.SetCancelFunc(cancelFunc)
 		form.SetButtonsAlign(tview.AlignCenter)
 
-		form.SetBorder(true).SetTitle(fmt.Sprintf("Send 0x%02X and Listen", "Sample test"))
+		selectedClusterIndex := clusterList.GetCurrentItem()
+		selectedCluster, _ := clusterList.GetItemText(selectedClusterIndex)
+		selectedCommandIndex := commandList.GetCurrentItem()
+		selectedCommand, _ := commandList.GetItemText(selectedCommandIndex)
 
-		modal := createModalForm(pages, form, 13, 55)
+		form.SetBorder(true).SetTitle("Confirmation")
+		form.AddTextView(fmt.Sprintf("Executing %s command on %s cluster", selectedCommand, selectedCluster), "", 0, 1, false, false)
+
+		modal := createModalForm(pages, form, 13, 80)
 
 		pages.AddPage("modal", modal, true, true)
 
