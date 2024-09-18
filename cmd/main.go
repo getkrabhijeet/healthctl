@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"healthctl/pkg/k8s"
 	"github.com/rivo/tview"
 )
 
@@ -29,26 +30,19 @@ func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
 	pages := tview.NewPages()
 
+	//kc := k8s.NewK8sClient()
+	clusterList := getClusterList()
+	for index, _ := range k8s.GetClustersFromKubeConfig() {
+		clusterList.AddItem(fmt.Sprintf("%s", index), "", 'x', nil)
+	}
+
 	infoUI := createInfoPanel(app)
 	logPanel := createTextViewPanel(app, "Log")
 
 	log.SetOutput(logPanel)
 
-	clusterList := getClusterList()
-	// the clusterList here will be retrieved from KubeConfig command.
-	// For test purpose, this is hardcoded now.
-	// clusterList.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
-	// 	onSelected(clusterList, index, mainText, secondaryText)
-	// })
-	clusterList.AddItem("Cluster 1", "", 0, nil)
-	clusterList.AddItem("Cluster 2", "", 0, nil)
-	clusterList.AddItem("Cluster 3", "", 0, nil)
-	clusterList.AddItem("Cluster 4", "", 0, nil)
 
 	commandList := createCommandList()
-	// commandList.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
-	// 	onSelected(commandList, index, mainText, secondaryText)
-	// })
 	commandList.AddItem("K8s Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("Infra Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("PAAS Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
@@ -131,17 +125,6 @@ func createMainLayout(clusterList, commandList tview.Primitive, reportsPanel tvi
 	return layout
 }
 
-//	func onSelected(clusterList *tview.List, index int, mainText string, secondaryText string) {
-//		for i := 0; i < clusterList.GetItemCount(); i++ {
-//			itemMainText, _ := clusterList.GetItemText(i)
-//			if strings.Contains(itemMainText, "[x]") {
-//				clusterList.SetItemText(i, strings.Replace(itemMainText, "[x]", "[ ]", 1), "")
-//			}
-//		}
-//		if strings.Contains(mainText, "[ ]") {
-//			clusterList.SetItemText(index, strings.Replace(mainText, "[ ]", "[x]", 1), secondaryText)
-//		}
-//	}
 func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List, commandList *tview.List) func() {
 	return func() {
 		startFunc := func() {
@@ -268,6 +251,35 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 }
 
 func main() {
+
+	kc, error := k8s.NewK8sClient()
+	if error != nil {
+		panic(error)
+	}
+	t := k8s.TestStatus{}
+
+	t = kc.CheckNodes()
+	fmt.Printf("Status of Worker nodes : %t\n", t.Status)
+	if t.Status == false {
+		fmt.Printf("DEBUG: %s, Error: %s", t.Info, t.Error)
+	}
+
+	t = kc.CheckPods()
+	fmt.Printf("Status of Pods : %t\n", t.Status)
+	if t.Status == false {
+		fmt.Printf("DEBUG: %s\n", t.Info)
+	}
+
+	// for cluster := range k8s.GetClustersFromKubeConfig() {
+	// 	fmt.Printf("Cluster: %s\n", cluster)
+	// }
+
+	t = kc.CheckEvents()
+	fmt.Printf("Status of Events : %t\n", t.Status)
+	if t.Status == false {
+		fmt.Printf("DEBUG: %s\n", t.Info)
+	}
+
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
