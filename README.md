@@ -21,3 +21,6 @@ healthctl
 
 ## Raw Design
 <img src="assets/healthctl.png" alt="healthctl">
+
+## Developed Application
+<img src="assets/healthctl-app.png" alt="healthctl-app">
