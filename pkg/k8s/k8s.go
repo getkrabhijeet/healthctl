@@ -81,7 +81,7 @@ func (kc *K8sClient) GetClusterNodes() []int {
 	masterNodes := 0
 	workerNodes := 0
 	for _, node := range nodes.Items {
-		if node.Labels["node-role.kubernetes.io/master"] == "true" {
+		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; ok {
 			masterNodes++
 		} else {
 			workerNodes++
