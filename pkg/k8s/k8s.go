@@ -17,7 +17,7 @@ type K8sClient struct {
 	Client *kubernetes.Clientset
 }
 
-func GetClustersFromKubeConfig() map[string]*clientcmdapi.Cluster {
+func GetClustersFromKubeConfig() *clientcmdapi.Config {
 	// Get clusters from kubeconfig
 	var kubeconfig1 *string
 	if home := homedir.HomeDir(); home != "" {
@@ -30,7 +30,7 @@ func GetClustersFromKubeConfig() map[string]*clientcmdapi.Cluster {
 	if err != nil {
 		panic(err.Error())
 	}
-	return config.Clusters
+	return config
 }
 
 func CreateK8sClientSet() (*kubernetes.Clientset, error) {
@@ -66,17 +66,28 @@ func (kc *K8sClient) GetClusterInfo() (string, error) {
 	return fmt.Sprintf("Cluster version: %s\n", clusterVersion), nil
 }
 
+// Set context for the client
+func (kc *K8sClient) SetContext(config *clientcmdapi.Config, contextToSwitch string) {
+	for _, contexts := range config.Contexts {
+		if contexts.Cluster == contextToSwitch {
+			config.CurrentContext = contextToSwitch
+		}
+	}
+}
+
 // GetClusterNodes returns the cluster nodes
-func (kc *K8sClient) GetClusterNodes() ([]string, error) {
-	var nodesList []string
-	nodes, err := kc.Client.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
+func (kc *K8sClient) GetClusterNodes() []int {
+	nodes, _ := kc.Client.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	masterNodes := 0
+	workerNodes := 0
 	for _, node := range nodes.Items {
-		nodesList = append(nodesList, node.Name)
+		if node.Labels["node-role.kubernetes.io/master"] == "true" {
+			masterNodes++
+		} else {
+			workerNodes++
+		}
 	}
-	return nodesList, nil
+	return []int{masterNodes, workerNodes}
 }
 
 // GetClusterNamespaces returns the cluster namespaces
