@@ -3,6 +3,7 @@ module healthctl
 go 1.21.0
 
 require (
+	github.com/gdamore/tcell v1.4.0
 	github.com/rivo/tview v0.0.0-20240818110301-fd649dbf1223
 	k8s.io/apimachinery v0.28.2
 	k8s.io/client-go v0.28.2
