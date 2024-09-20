@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 
+	"healthctl/pkg/infra"
 	"healthctl/pkg/k8s"
+	"healthctl/pkg/paas"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -25,12 +28,6 @@ type testInfoUI struct {
 }
 
 var Logo = []string{
-	`┓     ┓ ┓   ┓`,
-	`┣┓┏┓┏┓┃╋┣┓┏╋┃`,
-	`┛┗┗ ┗┻┗┗┛┗┗┗┗`,
-}
-
-var Logo1 = []string{
 
 	` _                _ _   _          _   _ `,
 	`| |              | | | | |        | | | |`,
@@ -48,7 +45,7 @@ func createApplication() (app *tview.Application) {
 	logPanel := createTextViewPanel(app, "Log")
 
 	log.SetOutput(logPanel)
-
+	log.Println("[Green]Starting HealthCtl[-:-:-:-]")
 	kc, _ := k8s.NewK8sClient()
 	kc.GetClusterInfo()
 	clusterList := getClusterList()
@@ -81,9 +78,6 @@ func createApplication() (app *tview.Application) {
 	})
 
 	reportList := createReportList()
-	// reportList.AddItem("2024-17-09", "", 0, nil)
-	// reportList.AddItem("2024-16-09", "", 0, nil)
-	// reportList.AddItem("2024-15-09", "", 0, nil)
 
 	// Set focus navigation
 	clusterList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -116,10 +110,10 @@ func createApplication() (app *tview.Application) {
 		return event
 	})
 
-	layout := createMainLayout(infoUI, clusterList, commandList, reportList)
+	layout := createMainLayout(infoUI, clusterList, commandList, logPanel)
 	pages.AddPage("main", layout, true, true)
 
-	app.SetRoot(pages, true)
+	app.SetRoot(pages, true).EnableMouse(true)
 
 	return app
 }
@@ -167,10 +161,10 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	//infoUI.Nodes = tview.NewTableCell("none")
 	commands.SetCell(2, 1, tview.NewTableCell("ctrl+o"))
 
-	commands.SetCellSimple(3, 0, "View Topology : ")
+	commands.SetCellSimple(3, 0, "View Alerts : ")
 	commands.GetCell(3, 0).SetAlign(tview.AlignLeft)
 	//infoUI.Pods = tview.NewTableCell("none")
-	commands.SetCell(3, 1, tview.NewTableCell("ctrl+t"))
+	commands.SetCell(3, 1, tview.NewTableCell("a"))
 
 	commands.SetCellSimple(4, 0, "Popeye : ")
 	commands.GetCell(4, 0).SetAlign(tview.AlignLeft)
@@ -185,7 +179,7 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	banner := tview.NewTable()
 	banner.SetBorder(false)
 	for i := 0; i < 7; i++ {
-		banner.SetCell(i+1, 0, tview.NewTableCell(Logo1[i]))
+		banner.SetCell(i+1, 0, tview.NewTableCell(Logo[i]))
 		banner.GetCell(i+1, 0).SetAlign(tview.AlignRight).SetBackgroundColor(tcell.ColorGreen)
 	}
 
@@ -196,7 +190,7 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 
 	info := tview.NewTextView()
 	info.SetBorder(true)
-	info.SetText("HealthCtl v1.0 - Copyright 2024 Microsoft Corp")
+	info.SetText("HealthCtl v1.0 - © Microsoft 2024")
 	info.SetTextAlign(tview.AlignCenter)
 
 	header := tview.NewFlex().
@@ -222,11 +216,57 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	return layout
 }
 
+func runTests(selectedCluster string, selectedCommand string) {
+	kc, _ := k8s.NewK8sClient()
+	config := k8s.GetClustersFromKubeConfig()
+	kc.SetContext(config, selectedCluster)
+	rl := []k8s.ResourceCheck{}
+	if selectedCommand == "K8s Sanity" {
+		log.Println("Running K8s Sanity")
+		rl = k8s.CheckK8s(kc.Client)
+	} else if selectedCommand == "Infra Sanity" {
+		log.Println("Running INFRA Sanity")
+		rl = infra.CheckINFRA(kc.Client)
+	} else if selectedCommand == "PAAS Sanity" {
+		log.Println("Running PAAS Sanity")
+		rl = paas.CheckPAAS(kc.Client)
+	} else if selectedCommand == "SMF Sanity" {
+		log.Println("Running SMF Sanity")
+	} else if selectedCommand == "UPF Sanity" {
+		log.Println("Running UPF Sanity")
+	} else {
+		log.Printf("Please select a test to run")
+	}
+
+	log.Printf("---------------------------------------------------------------------\n")
+	log.Printf("| %-5s | %-50s | %-15s |\n", "No.", "Test Summary", "Result")
+	log.Printf("---------------------------------------------------------------------\n")
+	status := ""
+	for index, resc := range rl {
+
+		if resc.Status {
+			status = "[:green]PASS[-:-:-:-]"
+		} else {
+			status = "[:red]FAIL[-:-:-:-]"
+		}
+		log.Printf("| %-5s | %-50s | %-15s |\n", strconv.Itoa(index+1), resc.Details, status)
+		log.Printf("---------------------------------------------------------------------\n")
+	}
+	log.Printf("| %-40s |\n", "Total Tests : "+strconv.Itoa(len(rl)))
+	log.Printf("---------------------------------------------------------------------\n")
+}
+
 func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List, commandList *tview.List) func() {
 	return func() {
-		startFunc := func() {
+		selectedClusterIndex := clusterList.GetCurrentItem()
+		selectedCluster, _ := clusterList.GetItemText(selectedClusterIndex)
+		selectedCommandIndex := commandList.GetCurrentItem()
+		selectedCommand, _ := commandList.GetItemText(selectedCommandIndex)
+
+		startFunc := func(selectedCluster string, selectedCommand string) {
 			stop(infoUI)()
 			pages.SwitchToPage("main")
+			runTests(selectedCluster, selectedCommand)
 			pages.RemovePage("modal")
 			ctx, cancel := context.WithCancel(context.Background())
 			infoUI.ctx = ctx
@@ -247,16 +287,11 @@ func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List
 
 		form := tview.NewForm()
 		form.AddButton("Start", func() {
-			startFunc()
+			startFunc(selectedCluster, selectedCommand)
 		})
 		form.AddButton("Cancel", cancelFunc)
 		form.SetCancelFunc(cancelFunc)
 		form.SetButtonsAlign(tview.AlignCenter)
-
-		selectedClusterIndex := clusterList.GetCurrentItem()
-		selectedCluster, _ := clusterList.GetItemText(selectedClusterIndex)
-		selectedCommandIndex := commandList.GetCurrentItem()
-		selectedCommand, _ := commandList.GetItemText(selectedCommandIndex)
 
 		form.SetBorder(true).SetTitle("Confirmation")
 		form.AddTextView(fmt.Sprintf("Executing %s command on %s cluster", selectedCommand, selectedCluster), "", 0, 1, false, false)
@@ -299,6 +334,7 @@ func createInfoPanel(app *tview.Application) (infoUI *testInfoUI) {
 func createTextViewPanel(app *tview.Application, name string) (panel *tview.TextView) {
 	panel = tview.NewTextView()
 	panel.SetBorder(true).SetTitle(name)
+	panel.SetDynamicColors(true)
 	panel.SetChangedFunc(func() {
 		app.Draw()
 	})
@@ -347,26 +383,50 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 	return modal
 }
 
+func Alerts(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List, commandList *tview.List) {
+	checkFunc := func() {
+		stop(infoUI)()
+		pages.SwitchToPage("main")
+		pages.RemovePage("alerts")
+		ctx, cancel := context.WithCancel(context.Background())
+		infoUI.ctx = ctx
+		infoUI.cancel = cancel
+		go func() {
+			defer func() {
+				cancel()
+				infoUI.ctx = nil
+			}()
+		}()
+	}
+	cancelFunc := func() {
+		pages.SwitchToPage("main")
+		pages.RemovePage("alerts")
+	}
+
+	form := tview.NewForm()
+	form.AddButton("Check", func() {
+		checkFunc()
+	})
+	form.AddButton("Close", cancelFunc)
+	form.SetCancelFunc(cancelFunc)
+	form.SetButtonsAlign(tview.AlignCenter)
+
+	config := k8s.GetClustersFromKubeConfig()
+	clusters := []string{}
+	for index, _ := range config.Clusters {
+		clusters = append(clusters, index)
+	}
+
+	form.SetBorder(true).SetTitle("Alerts")
+	form.AddDropDown("Cluster", clusters, 0, nil)
+	form.AddDropDown("Alerts", []string{"Cluster Alerts", "Application Alerts"}, 0, nil)
+
+	alerts := createModalForm(pages, form, 80, 160)
+
+	pages.AddPage("alerts", alerts, true, true)
+
+}
 func main() {
-	// kc, _ := k8s.NewK8sClient()
-	// r := []paas.ResourceCheck{
-	// 	paas.CheckGrafana(kc.Client),
-	// 	paas.CheckPrometheus(kc.Client),
-	// 	paas.CheckKibana(kc.Client),
-	// 	paas.CheckElastic(kc.Client),
-	// 	paas.CheckJaeger(kc.Client),
-	// 	paas.CheckKiali(kc.Client),
-	// 	paas.CheckIstio(kc.Client),
-	// 	paas.CheckDbEtcd(kc.Client),
-	// 	paas.CheckKubeProm(kc.Client),
-	// 	paas.CheckRedisOperator(kc.Client),
-	// 	paas.CheckRedisCluster(kc.Client),
-	// 	paas.CheckElastAlert(kc.Client),
-	// 	paas.CheckAlerta(kc.Client),
-	// }
-
-	// paas.PrintResults(r)
-
 	app := createApplication()
 
 	if err := app.Run(); err != nil {

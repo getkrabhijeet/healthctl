@@ -13,20 +13,23 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+var kubeconfig *string
+
+func init() {
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+}
+
 type K8sClient struct {
 	Client *kubernetes.Clientset
 }
 
 func GetClustersFromKubeConfig() *clientcmdapi.Config {
-	// Get clusters from kubeconfig
-	var kubeconfig1 *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig1 = flag.String("kubeconfig1", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig1 = flag.String("kubeconfig1", "", "absolute path to the kubeconfig file")
-	}
 	flag.Parse()
-	config, err := clientcmd.LoadFromFile(*kubeconfig1)
+	config, err := clientcmd.LoadFromFile(*kubeconfig)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -34,12 +37,7 @@ func GetClustersFromKubeConfig() *clientcmdapi.Config {
 }
 
 func CreateK8sClientSet() (*kubernetes.Clientset, error) {
-	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
+
 	flag.Parse()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
