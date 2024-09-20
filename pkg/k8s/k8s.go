@@ -2,15 +2,24 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"path/filepath"
+
+	"bytes"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/homedir"
+
+	v1 "k8s.io/api/core/v1"
+
+	"k8s.io/client-go/kubernetes/scheme"
+
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 var kubeconfig *string
@@ -209,4 +218,82 @@ func (kc *K8sClient) CheckEvents() TestStatus {
 		Status: true,
 		Info:   "No failed events found",
 		Error:  nil}
+}
+
+type Alert struct {
+	AlertName string
+	Severity  string
+	StartsAt  string
+	PodName   string
+	Summary   string
+}
+
+type origAlert struct {
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
+	StartsAt    string            `json:"startsAt"`
+	EndsAt      string            `json:"endsAt"`
+}
+
+func (kc *K8sClient) GetAlerts() []Alert {
+	//execute command to get alerts -  kubectl exec -it -n fed-prometheus alertmanager-prometheus-alerts-0 -- sh -c "amtool -o json alert query -a --alertmanager.url http://localhost:9093"
+	alertList := []Alert{}
+
+	command := "sh -c \"amtool -o json alert query -a --alertmanager.url http://localhost:9093\""
+	stdout, stderr, err := kc.ExecuteRemoteCommand("fed-prometheus", "alertmanager-prometheus-alerts-0", "alertmanager", command)
+
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println(stderr)
+	}
+
+	origAlerts := []origAlert{}
+	// Unmarshal the json output
+	err = json.Unmarshal([]byte(stdout), &origAlerts)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for _, alert := range origAlerts {
+		alertList = append(alertList, Alert{
+			AlertName: alert.Labels["alertname"],
+			Severity:  alert.Labels["severity"],
+			StartsAt:  alert.StartsAt,
+			PodName:   alert.Labels["pod"],
+			Summary:   alert.Annotations["summary"],
+		})
+	}
+	return alertList
+
+}
+
+func (kc *K8sClient) ExecuteRemoteCommand(namespace, pod, container, command string) (string, string, error) {
+	flag.Parse()
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+	buf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	request := kc.Client.CoreV1().RESTClient().
+		Post().
+		Namespace(namespace).
+		Resource("pods").
+		Name(pod).
+		SubResource("exec").
+		Param("container", container).
+		VersionedParams(&v1.PodExecOptions{
+			Command: []string{"/bin/sh", "-c", command},
+			Stdin:   false,
+			Stdout:  true,
+			Stderr:  true,
+			TTY:     true,
+		}, scheme.ParameterCodec)
+	exec, _ := remotecommand.NewSPDYExecutor(config, "POST", request.URL())
+	_ = exec.Stream(remotecommand.StreamOptions{
+		Stdout: buf,
+		Stderr: errBuf,
+	})
+
+	return buf.String(), errBuf.String(), nil
 }
