@@ -48,7 +48,7 @@ func createApplication() (app *tview.Application) {
 	//do not print date and time
 	log.SetFlags(0)
 	log.SetOutput(logPanel)
-	log.Println("[Green:b]Welcome to HealthCtl[-:-:-:-]")
+	log.Println("[Green:bl]Welcome to HealthCtl[-:-:-:-]")
 	//Print release version and usage information
 	log.Println("[Green:b]HealthCtl v1.0[-:-:-:-]")
 	//print that healthctl is a tool to run sanity checks on k8s clusters
@@ -56,21 +56,21 @@ func createApplication() (app *tview.Application) {
 	//print that healthctl is a tool to run sanity checks on application NFs in k8s clusters
 	log.Println("[Green:b]HealthCtl is a tool to run sanity checks on application NFs in k8s clusters[-:-:-:-]")
 	//check alerts
-	log.Println("[Green:b]Checking Alerts[-:-:-:-]")
+	log.Println("[Green:b]Check Alerts.[-:-:-:-]")
 	//check reports
-	log.Println("[Green:b]Checking Reports[-:-:-:-]")
+	log.Println("[Green:b]Check Reports.[-:-:-:-]")
 	//check SMF status
-	log.Println("[Green:b]Checking SMF Status[-:-:-:-]")
+	log.Println("[Green:b]Check SMF Status.[-:-:-:-]")
 	//check UPF status
-	log.Println("[Green:b]Checking UPF Status[-:-:-:-]")
+	log.Println("[Green:b]Check UPF Status.[-:-:-:-]")
 	//check Redis status
-	log.Println("[Green:b]Checking Redis Status[-:-:-:-]")
+	log.Println("[Green:b]Check Redis Status.[-:-:-:-]")
 	//collect Kargo
 	log.Println("[Green:b]Collecting Kargo[-:-:-:-]")
 	//set debug level
-	log.Println("[Green:b]Setting Debug Level[-:-:-:-]")
+	log.Println("[Green:b]Setting Debug Level.[-:-:-:-]")
 	//flush Redis
-	log.Println("[Green:b]Flushing Redis[-:-:-:-]")
+	log.Println("[Green:b]Flushing Redis.[-:-:-:-]")
 
 	kc, _ := k8s.NewK8sClient()
 	kc.GetClusterInfo()
@@ -102,13 +102,12 @@ func createApplication() (app *tview.Application) {
 	// create an observation flex with buttons to check alerts
 	afn_tools := tview.NewFlex().SetDirection(tview.FlexRow)
 	afn_tools.AddItem(tview.NewButton("Alerts").SetSelectedFunc(Alerts(pages)), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Reports").SetSelectedFunc(func() {}), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("SMF Status").SetSelectedFunc(func() {}), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("UPF Status").SetSelectedFunc(func() {}), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Redis status").SetSelectedFunc(func() {}), 3, 1, false)
+	afn_tools.AddItem(tview.NewButton("Redis status").SetSelectedFunc(RedisStatus(pages)), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("Collect Kargo").SetSelectedFunc(func() {}), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("Set Debug Level").SetSelectedFunc(func() {}), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Flush Redis").SetSelectedFunc(func() {}), 3, 1, false)
+	afn_tools.AddItem(tview.NewButton("Flush Redis").SetSelectedFunc(FlushRedis(pages)), 3, 1, false)
 
 	// Set focus navigation
 	clusterList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -155,6 +154,36 @@ func createApplication() (app *tview.Application) {
 	return app
 }
 
+func RedisStatus(pages *tview.Pages) func() {
+	kc, _ := k8s.NewK8sClient()
+	return func() {
+		clearLogPanel(pages)
+		redisStatus := kc.GetRedisStatus()
+		displayRedisStatus(redisStatus)
+
+	}
+}
+
+func FlushRedis(pages *tview.Pages) func() {
+	kc, _ := k8s.NewK8sClient()
+	return func() {
+		clearLogPanel(pages)
+		size := kc.GetRedisDbSize()
+		for _, s := range size {
+			log.Printf("%s : %s \n", s.PodName, s.Output)
+		}
+		log.Printf("[red:bl]Flushing Redis Data[-:-:-:-]\n")
+		err := kc.FlushRedisData()
+		if err != nil {
+			log.Printf("[red:bl]Error Flushing Redis Data: %v[-:-:-:-]\n", err)
+		}
+		size = kc.GetRedisDbSize()
+		for _, s := range size {
+			log.Printf("%s : %s \n", s.PodName, s.Output)
+		}
+	}
+}
+
 func Alerts(pages *tview.Pages) func() {
 	kc, _ := k8s.NewK8sClient()
 	return func() {
@@ -168,13 +197,70 @@ func Alerts(pages *tview.Pages) func() {
 	}
 }
 
+func displayRedisStatus(r k8s.RedisStatus) {
+	var hyphenFormatter = func() {
+		log.Printf("| %-33s | %-15s | %-40s | %-50s | %-10s | %-10s | %-15s |\n", "─────────────────────────────────", "───────────────", "────────────────────────────────────────", "──────────────────────────────────────────────────", "──────────", "──────────", "───────────────")
+	}
+	var newHyphenFormatter = func() {
+		log.Printf("| %-155s |\n", "───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────")
+	}
+
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("Number of Primaries Configured: %d", r.PrimariesConfigured))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("Number of Replicas Configured: %d", r.ReplicasConfigured))
+	newHyphenFormatter()
+
+	if r.PodStatus {
+		log.Printf("| %-191s |\n", "---- All redis cluster pods are in n/n ready state ----")
+	} else {
+		log.Printf("| %-191s |\n", "---- Redis cluster pods are [red]NOT[-] in n/n ready state ----")
+	}
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("cluster_state: %s", r.ClusterState))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("cluster_slots_ok: %d", r.ClusterSlotsOk))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("cluster_known_nodes: %d", r.ClusterKnownNodes))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("cluster_size: %d", r.ClusterSize))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("cluster_slots_pfail: %d", r.ClusterSlotsPfail))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("cluster_slots_fail: %d", r.ClusterSlotsFail))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("Number of Active zones : %d", r.NumberActiveZones))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("Number of zones where Redis primaries are present : %d", r.NumberZonesPrimaries))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", fmt.Sprintf("Number of Redis primaries on Zone %s : %d", "TODO", r.NumberPrimariesInZone))
+	newHyphenFormatter()
+	log.Printf("| %-191s |\n", "---- Redis Cluster is working as expected ----")
+	hyphenFormatter()
+	log.Printf("| %-33s | %-15s | %-40s | %-50s | %-10s | %-10s | %-15s |\n", "PodName", "PodIp", "RedisNodeId", "WorkerNode", "Zone", "CPU", "Memory")
+	hyphenFormatter()
+	//print all node fields in a table
+	for _, node := range r.RedisNodeDetails {
+		log.Printf("| %-33s | %-15s | %-40s | %-50s | %-10s | %-10s | %-15s |\n", node.PodName, node.IP, node.ID, r.PodDetails[node.PodName].Worker, node.Zone, r.PodDetails[node.PodName].CPU, r.PodDetails[node.PodName].Memory)
+	}
+	hyphenFormatter()
+
+}
+
 func displayAlerts(alertList []k8s.Alert) {
+	equalFormatter := func() {
+		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "=================================", "========", "========================", "===================================", "==============================")
+	}
+	hyphenFormatter := func() {
+		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "---------------------------------", "--------", "------------------------", "-----------------------------------", "------------------------------")
+	}
 
 	//clear logPanel
 
-	log.Printf("| %-40s | %-15s | %-30s | %-55s | %-30s\n", "---------------------------------------", "---------------", "------------------------------", "-------------------------------------------------------", "------------------------------")
-	log.Printf("| %-40s | %-15s | %-30s | %-55s | %-30s\n", "Alertname", "Severity", "Starts At", "Pod Name", "Summary")
-	log.Printf("| %-40s | %-15s | %-30s | %-55s | %-30s\n", "---------------------------------------", "---------------", "------------------------------", "-------------------------------------------------------", "------------------------------")
+	equalFormatter()
+	log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "Alertname", "Severity", "Starts At", "Pod Name", "Summary")
+	equalFormatter()
+
 	for _, alert := range alertList {
 		// if alert.Severity == "critical" {
 		// 	alert.Severity = "[red]" + alert.Severity + "[-]"
@@ -184,11 +270,11 @@ func displayAlerts(alertList []k8s.Alert) {
 		// 	alert.Severity = "[green]" + alert.Severity + "[-]"
 		// }
 
-		log.Printf("| %-40s | %-15s | %-30s | %-55s | %-30s\n", alert.AlertName, alert.Severity, alert.StartsAt, alert.PodName, alert.Summary)
-		log.Printf("| %-40s | %-15s | %-30s | %-55s | %-30s\n", "---------------------------------------", "---------------", "------------------------------", "-------------------------------------------------------", "------------------------------")
+		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", alert.AlertName, alert.Severity, alert.StartsAt, alert.PodName, alert.Summary)
+		hyphenFormatter()
 	}
-	log.Printf("| %-40s |\n", "Total Alerts : "+strconv.Itoa(len(alertList)))
-	log.Printf("| %-40s | %-15s | %-30s | %-55s | %-30s\n", "---------------------------------------", "---------------", "------------------------------", "-------------------------------------------------------", "------------------------------")
+	log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "", "", "", "Total Alerts", strconv.Itoa(len(alertList)))
+	equalFormatter()
 }
 
 func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primitive, output tview.Primitive, afn_tools *tview.Flex) (layout *tview.Flex) {

@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"path/filepath"
+	"time"
 
 	"bytes"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -33,7 +38,8 @@ func init() {
 }
 
 type K8sClient struct {
-	Client *kubernetes.Clientset
+	Client        *kubernetes.Clientset
+	DynamicClient dynamic.Interface
 }
 
 func GetClustersFromKubeConfig() *clientcmdapi.Config {
@@ -55,12 +61,30 @@ func CreateK8sClientSet() (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(config)
 }
 
+func CreateDynamicClientSet() (dynamic.Interface, error) {
+	flag.Parse()
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+	return dynamic.NewForConfig(config)
+}
+
 func NewK8sClient() (*K8sClient, error) {
 	client, err := CreateK8sClientSet()
 	if err != nil {
 		return nil, err
 	}
-	return &K8sClient{Client: client}, nil
+
+	dynamicClient, err := CreateDynamicClientSet()
+	if err != nil {
+		return nil, err
+	}
+
+	return &K8sClient{
+		Client:        client,
+		DynamicClient: dynamicClient,
+	}, nil
 }
 
 // GetClusterInfo returns the cluster version
@@ -296,4 +320,200 @@ func (kc *K8sClient) ExecuteRemoteCommand(namespace, pod, container, command str
 	})
 
 	return buf.String(), errBuf.String(), nil
+}
+
+type RedisDbSizeInfo struct {
+	PodName string
+	Output  string
+}
+
+func (kc *K8sClient) GetRedisDbSize() []RedisDbSizeInfo {
+	redis_namespace := "fed-redis-cluster"
+	redis_container := "redis-node"
+
+	returnSize := []RedisDbSizeInfo{}
+
+	//get the list of pods from the redis namespace
+	pods, err := kc.Client.CoreV1().Pods(redis_namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	for _, pod := range pods.Items {
+		//execute command to get the redis db size
+		command := fmt.Sprintf("redis-cli --cluster call --cluster-only-masters redis-cluster.%s.svc.cluster.local:6379 dbsize", redis_namespace)
+		stdout, stderr, err := kc.ExecuteRemoteCommand(redis_namespace, pod.Name, redis_container, command)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(stderr)
+		}
+		returnSize = append(returnSize, RedisDbSizeInfo{
+			PodName: pod.Name,
+			Output:  stdout,
+		})
+	}
+	return returnSize
+}
+func (kc *K8sClient) FlushRedisData() error {
+	redis_namespace := "fed-redis-cluster"
+	redis_container := "redis-node"
+
+	returnSize := []RedisDbSizeInfo{}
+
+	//get the list of pods from the redis namespace
+	pods, err := kc.Client.CoreV1().Pods(redis_namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	for _, pod := range pods.Items {
+		//execute command to flush redis data
+		command := fmt.Sprintf("redis-cli --cluster call --cluster-only-masters redis-cluster.%s.svc.cluster.local:6379 flushall", redis_namespace)
+		stdout, stderr, err := kc.ExecuteRemoteCommand(redis_namespace, pod.Name, redis_container, command)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(stderr)
+			return err
+		}
+		returnSize = append(returnSize, RedisDbSizeInfo{
+			PodName: pod.Name,
+			Output:  stdout,
+		})
+	}
+	return nil
+}
+
+// Node represents an individual Redis node in the cluster
+type Node struct {
+	ID         string   `json:"id"`
+	IP         string   `json:"ip"`
+	PodName    string   `json:"podName"`
+	Port       string   `json:"port"`
+	Role       string   `json:"role"`
+	Slots      []string `json:"slots,omitempty"`      // Omit if empty
+	PrimaryRef string   `json:"primaryRef,omitempty"` // Omit if empty
+	Zone       string   `json:"zone"`
+}
+
+// Cluster represents the cluster information
+type Cluster struct {
+	LabelSelectorPath          string         `json:"labelSelectorPath"`
+	MaxReplicationFactor       int            `json:"maxReplicationFactor"`
+	MinReplicationFactor       int            `json:"minReplicationFactor"`
+	Nodes                      []Node         `json:"nodes"`
+	NumberOfPods               int            `json:"numberOfPods"`
+	NumberOfPodsReady          int            `json:"numberOfPodsReady"`
+	NumberOfPrimaries          int            `json:"numberOfPrimaries"`
+	NumberOfPrimariesReady     int            `json:"numberOfPrimariesReady"`
+	NumberOfRedisNodesRunning  int            `json:"numberOfRedisNodesRunning"`
+	NumberOfReplicasPerPrimary map[string]int `json:"numberOfReplicasPerPrimary"`
+	Status                     string         `json:"status"`
+}
+
+// Condition represents a condition for the cluster status
+type Condition struct {
+	LastProbeTime      time.Time `json:"lastProbeTime"`
+	LastTransitionTime time.Time `json:"lastTransitionTime"`
+	Message            string    `json:"message"`
+	Reason             string    `json:"reason"`
+	Status             string    `json:"status"`
+	Type               string    `json:"type"`
+}
+
+// ClusterStatus represents the overall cluster status including conditions
+type ClusterStatus struct {
+	Cluster    Cluster     `json:"cluster"`
+	Conditions []Condition `json:"conditions"`
+	StartTime  time.Time   `json:"startTime"`
+}
+type RedisStatus struct {
+	PrimariesConfigured   int
+	ReplicasConfigured    int
+	PodStatus             bool
+	ClusterState          bool
+	ClusterSlotsOk        int
+	ClusterKnownNodes     int
+	ClusterSize           int
+	ClusterSlotsPfail     int
+	ClusterSlotsFail      int
+	NumberActiveZones     int
+	RedisNodeDetails      []Node
+	NumberZonesPrimaries  int
+	NumberPrimariesInZone int
+	PodDetails            map[string]missingDetails
+}
+
+type missingDetails struct {
+	Worker string
+	CPU    string
+	Memory string
+}
+
+func (kc *K8sClient) GetRedisStatus() RedisStatus {
+	redis_namespace := "fed-redis-cluster"
+	customResourceName := "node-for-redis"
+	customResource, err := kc.DynamicClient.Resource(schema.GroupVersionResource{
+		Group:    "db.ibm.com",
+		Version:  "v1alpha1",
+		Resource: "redisclusters",
+	}).Namespace(redis_namespace).Get(context.Background(), customResourceName, metav1.GetOptions{})
+
+	if err != nil {
+		fmt.Println(err)
+		return RedisStatus{}
+	}
+
+	//get the status of the custom resource
+
+	// Assuming the custom resource has a status field
+	status, found, err := unstructured.NestedMap(customResource.Object, "status")
+	if err != nil || !found {
+		log.Fatalf("Error fetching status field: %v", err)
+	}
+
+	var clusterStatus ClusterStatus
+	temp, err := json.Marshal(status)
+
+	err = json.Unmarshal(temp, &clusterStatus)
+	if err != nil {
+		log.Fatalf("Error unmarshalling status field: %v", err)
+	}
+
+	return RedisStatus{
+		PrimariesConfigured: clusterStatus.Cluster.NumberOfPrimaries,
+		ReplicasConfigured:  clusterStatus.Cluster.MaxReplicationFactor,
+		PodStatus:           clusterStatus.Cluster.NumberOfPods == clusterStatus.Cluster.NumberOfPodsReady,
+		ClusterState:        clusterStatus.Cluster.Status == "OK",
+		ClusterSlotsOk:      len(clusterStatus.Cluster.Nodes),
+		ClusterKnownNodes:   len(clusterStatus.Cluster.Nodes),
+		ClusterSize:         clusterStatus.Cluster.NumberOfPods,
+		ClusterSlotsPfail:   0,
+		ClusterSlotsFail:    0,
+		RedisNodeDetails:    clusterStatus.Cluster.Nodes,
+		NumberActiveZones: func() int {
+			zoneMap := make(map[string]bool)
+			for _, node := range clusterStatus.Cluster.Nodes {
+				zoneMap[node.Zone] = true
+			}
+			return len(zoneMap)
+		}(),
+		NumberZonesPrimaries:  1,
+		NumberPrimariesInZone: clusterStatus.Cluster.NumberOfPrimaries,
+		PodDetails: func(nodeList []Node) map[string]missingDetails {
+			podDetails := make(map[string]missingDetails)
+
+			for _, node := range nodeList {
+				var nodeDetails missingDetails
+				pod, err := kc.Client.CoreV1().Pods(redis_namespace).Get(context.Background(), node.PodName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Println(err)
+				}
+				nodeDetails.Worker = pod.Spec.NodeName
+				nodeDetails.CPU = pod.Spec.Containers[0].Resources.Requests.Cpu().String()
+				nodeDetails.Memory = pod.Spec.Containers[0].Resources.Requests.Memory().String()
+				podDetails[node.PodName] = nodeDetails
+			}
+			return podDetails
+
+		}(clusterStatus.Cluster.Nodes),
+	}
+
 }
