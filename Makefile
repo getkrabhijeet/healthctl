@@ -11,7 +11,7 @@ install:
 uninstall: 
 	rm -f /usr/local/bin/healthctl
 
-run: fmt tidy
+run:
 	go run cmd/main.go
 
 tidy:
