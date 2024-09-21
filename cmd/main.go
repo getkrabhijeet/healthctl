@@ -6,9 +6,9 @@ import (
 	"log"
 	"strconv"
 
-	"healthctl/pkg/infra"
 	"healthctl/pkg/k8s"
-	"healthctl/pkg/paas"
+	"healthctl/pkg/models"
+	"healthctl/pkg/testsuite"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -44,11 +44,6 @@ func createApplication() (app *tview.Application) {
 	infoUI := createInfoPanel(app)
 	logPanel := createTextViewPanel(app, "Output Terminal")
 	logPanel.SetDynamicColors(true)
-
-	// logPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
-	// 	app.SetFocus(logPanel)
-	// 	return action, event
-	// })
 
 	//do not print date and time
 	log.SetFlags(0)
@@ -103,10 +98,6 @@ func createApplication() (app *tview.Application) {
 	commandList.AddItem("UPF Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("Storage Analysis", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("Netpol Scan", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	// commandList.AddItem("Stop", "", 's', stop(infoUI))
-	// commandList.AddItem("Quit", "", 'q', func() {
-	// 	app.Stop()
-	// })
 
 	// create an observation flex with buttons to check alerts
 	afn_tools := tview.NewFlex().SetDirection(tview.FlexRow)
@@ -308,28 +299,41 @@ func runTests(selectedCluster string, selectedCommand string) {
 	kc, _ := k8s.NewK8sClient()
 	config := k8s.GetClustersFromKubeConfig()
 	kc.SetContext(config, selectedCluster)
-	rl := []k8s.ResourceCheck{}
+	rl := []models.ResourceCheck{}
 	if selectedCommand == "K8s Sanity" {
 		log.Println("Running K8s Sanity")
-		rl = k8s.CheckK8s(kc.Client)
+		rl = testsuite.CheckK8s(kc.Client)
 	} else if selectedCommand == "Infra Sanity" {
 		log.Println("Running INFRA Sanity")
-		rl = infra.CheckINFRA(kc.Client)
+		rl = testsuite.CheckINFRA(kc.Client)
 	} else if selectedCommand == "PAAS Sanity" {
 		log.Println("Running PAAS Sanity")
-		rl = paas.CheckPAAS(kc.Client)
+		rl = testsuite.CheckPAAS(kc.Client)
 	} else if selectedCommand == "SMF Sanity" {
 		log.Println("Running SMF Sanity")
+		rl = testsuite.CheckSMF(kc.Client)
 	} else if selectedCommand == "UPF Sanity" {
 		log.Println("Running UPF Sanity")
 	} else {
 		log.Printf("Please select a test to run")
 	}
 
-	log.Printf("| %-5s | %-50s | %-7s |\n", "-----", "--------------------------------------------------", "------")
-	log.Printf("| %-5s | %-50s | %-7s |\n", "No.", "Test Summary", "Result")
-	log.Printf("| %-5s | %-50s | %-7s |\n", "-----", "--------------------------------------------------", "------")
+	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
+	log.Printf("| %-5s | %-150s | %-7s |\n", "No.", "Test Summary", "Result")
+	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
+
 	status := ""
+	for index, resc := range rl {
+		if resc.Status {
+			status = "PASS"
+		} else {
+			status = "FAIL"
+		}
+		log.Printf("| %-5s | %-150s | %-7s |\n", strconv.Itoa(index+1), resc.Details, status)
+		log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
+	}
+	log.Printf("| %-5s | %-150s | %-7s |\n", "", "Total Tests", strconv.Itoa(len(rl)))
+	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
 	for index, resc := range rl {
 
 		if resc.Status {
@@ -337,11 +341,11 @@ func runTests(selectedCluster string, selectedCommand string) {
 		} else {
 			status = "FAIL"
 		}
-		log.Printf("| %-5s | %-50s | %-7s |\n", strconv.Itoa(index+1), resc.Details, status)
-		log.Printf("| %-5s | %-50s | %-7s |\n", "-----", "--------------------------------------------------", "------")
+		log.Printf("| %-5s | %-150s | %-7s |\n", strconv.Itoa(index+1), resc.Details, status)
+		log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
 	}
-	log.Printf("| %-5s | %-50s | %-7s |\n", "", "Total Tests", strconv.Itoa(len(rl)))
-	log.Printf("| %-5s | %-50s | %-7s |\n", "-----", "--------------------------------------------------", "------")
+	log.Printf("| %-5s | %-150s | %-7s |\n", "", "Total Tests", strconv.Itoa(len(rl)))
+	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
 }
 
 func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List, commandList *tview.List) func() {
@@ -457,10 +461,6 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 }
 
 func main() {
-	// kc, _ := k8s.NewK8sClient()
-	// a := kc.GetAlerts()
-	// fmt.Println(a)
-
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
