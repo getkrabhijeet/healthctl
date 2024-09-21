@@ -1,18 +1,23 @@
 # Description: Makefile for healthctl
-
-all:
+all: fmt tidy
 	go build -o healthctl cmd/main.go
 
-clean:
+clean: 
 	rm -f healthctl
 
-install:
+install: 
 	cp healthctl /usr/local/bin
 
-uninstall:
+uninstall: 
 	rm -f /usr/local/bin/healthctl
 
-run:
+run: fmt tidy
 	go run cmd/main.go
+
+tidy:
+	go mod tidy
+
+fmt:
+	go fmt ./...
 
 
