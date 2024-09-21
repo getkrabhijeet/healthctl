@@ -122,16 +122,42 @@ func (kc *K8sClient) GetClusterNodes() []int {
 }
 
 // GetClusterNamespaces returns the cluster namespaces
-func (kc *K8sClient) GetClusterNamespaces() ([]string, error) {
+func (kc *K8sClient) GetClusterNamespaces() []string {
 	var namespaceList []string
 	namespaces, err := kc.Client.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	for _, namespace := range namespaces.Items {
 		namespaceList = append(namespaceList, namespace.Name)
 	}
-	return namespaceList, nil
+	return namespaceList
+}
+
+func (kc *K8sClient) GetPods(namespace string) []string {
+	var podList []string
+	pods, err := kc.Client.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	for _, pod := range pods.Items {
+		podList = append(podList, pod.Name)
+	}
+	return podList
+}
+
+func (kc *K8sClient) GetContainers(pod string) []string {
+	var containerList []string
+	pods, err := kc.Client.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("metadata.name=%s", pod),
+	})
+	if err != nil {
+		return nil
+	}
+	for _, container := range pods.Items[0].Spec.Containers {
+		containerList = append(containerList, container.Name)
+	}
+	return containerList
 }
 
 func GetAPIResources(client *kubernetes.Clientset) {
@@ -516,4 +542,22 @@ func (kc *K8sClient) GetRedisStatus() RedisStatus {
 		}(clusterStatus.Cluster.Nodes),
 	}
 
+}
+
+// cmd = 'kubectl -n {} exec -it {} -c {} bash -- curl http://127.0.0.1:{}/tenv/eTrace/enable?filter=all\&level=DEBUG_{}'.format(namespace, pod_name, pod_config['container'], pod_config['port'], debug_level)
+func (kc *K8sClient) SetDebugLevel(namespace, pod, container, debugLevel string) bool {
+	port := "9090"
+	//TODO: Port is hardcoded here. It should be fetched from the local config based on the service name
+	//TODO: Prepare the local config file to fetch the port based on the service name
+	command := fmt.Sprintf("curl http://127.0.0.1:%s/tenv/eTrace/enable?filter=all\\&level=%s", port, debugLevel)
+	fmt.Println(command)
+	stdout, stderr, err := kc.ExecuteRemoteCommand(namespace, pod, container, command)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println(stderr)
+		return false
+	}
+
+	fmt.Println(stdout)
+	return true
 }

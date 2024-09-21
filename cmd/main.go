@@ -48,29 +48,10 @@ func createApplication() (app *tview.Application) {
 	//do not print date and time
 	log.SetFlags(0)
 	log.SetOutput(logPanel)
-	log.Println("[Green:bl]Welcome to HealthCtl[-:-:-:-]")
-	//Print release version and usage information
-	log.Println("[Green:b]HealthCtl v1.0[-:-:-:-]")
-	//print that healthctl is a tool to run sanity checks on k8s clusters
-	log.Println("[Green:b]HealthCtl is a tool to run sanity checks on k8s clusters[-:-:-:-]")
-	//print that healthctl is a tool to run sanity checks on application NFs in k8s clusters
-	log.Println("[Green:b]HealthCtl is a tool to run sanity checks on application NFs in k8s clusters[-:-:-:-]")
-	//check alerts
-	log.Println("[Green:b]Check Alerts.[-:-:-:-]")
-	//check reports
-	log.Println("[Green:b]Check Reports.[-:-:-:-]")
-	//check SMF status
-	log.Println("[Green:b]Check SMF Status.[-:-:-:-]")
-	//check UPF status
-	log.Println("[Green:b]Check UPF Status.[-:-:-:-]")
-	//check Redis status
-	log.Println("[Green:b]Check Redis Status.[-:-:-:-]")
-	//collect Kargo
-	log.Println("[Green:b]Collecting Kargo[-:-:-:-]")
-	//set debug level
-	log.Println("[Green:b]Setting Debug Level.[-:-:-:-]")
-	//flush Redis
-	log.Println("[Green:b]Flushing Redis.[-:-:-:-]")
+	log.Println("[green::b:]Welcome to HealthCtl[-::-:]")
+	log.Println("[green]Version: v1.0[-]")
+	log.Println("[green]This is a tool to run sanity checks on k8s clusters and NFs in K8s clusters[-]")
+	log.Println("[green]Check Alerts, SMF status, UPF Status, Redis Status, Collect Kargo, Set Debug levels and Flush Redis.[-]")
 
 	kc, _ := k8s.NewK8sClient()
 	kc.GetClusterInfo()
@@ -106,7 +87,7 @@ func createApplication() (app *tview.Application) {
 	afn_tools.AddItem(tview.NewButton("UPF Status").SetSelectedFunc(func() {}), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("Redis status").SetSelectedFunc(RedisStatus(pages)), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("Collect Kargo").SetSelectedFunc(func() {}), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Set Debug Level").SetSelectedFunc(func() {}), 3, 1, false)
+	afn_tools.AddItem(tview.NewButton("Set Debug Level").SetSelectedFunc(SetDebugLevel(pages)), 3, 1, false)
 	afn_tools.AddItem(tview.NewButton("Flush Redis").SetSelectedFunc(FlushRedis(pages)), 3, 1, false)
 
 	// Set focus navigation
@@ -152,6 +133,59 @@ func createApplication() (app *tview.Application) {
 	app.SetRoot(pages, true).EnableMouse(true)
 
 	return app
+}
+
+func SetDebugLevel(pages *tview.Pages) func() {
+	kc, _ := k8s.NewK8sClient()
+	return func() {
+		//open a new popup with a form to take input like namespace, podname, container name and debug level
+		form := tview.NewForm()
+		var namespaceSelection, podSelection, containerSelection, levelSelection *tview.DropDown
+
+		namespaceSelection = tview.NewDropDown()
+		namespaceSelection.SetOptions(kc.GetClusterNamespaces(), func(text string, index int) {
+			//get all pods in selected namespace
+			podSelection.SetOptions(kc.GetPods(text), func(text string, index int) {
+				//get all containers in selected pod
+				containerSelection.SetOptions(kc.GetContainers(text), func(text string, index int) {
+					//Set level selection
+					levelSelection.SetOptions([]string{"DEBUG_1", "DEBUG_2", "DEBUG_3"}, nil).SetLabel("Level")
+
+				}).SetLabel("Container")
+			}).SetLabel("Pod")
+		}).SetLabel("Namespace")
+
+		podSelection = tview.NewDropDown()
+		containerSelection = tview.NewDropDown()
+		levelSelection = tview.NewDropDown()
+
+		form.AddFormItem(namespaceSelection)
+		form.AddFormItem(podSelection)
+		form.AddFormItem(containerSelection)
+		form.AddFormItem(levelSelection)
+
+		form.AddButton("Submit", func() {
+			_, namespace := form.GetFormItemByLabel("Namespace").(*tview.DropDown).GetCurrentOption()
+			_, podName := form.GetFormItemByLabel("Pod").(*tview.DropDown).GetCurrentOption()
+			_, containerName := form.GetFormItemByLabel("Container").(*tview.DropDown).GetCurrentOption()
+			_, debugLevel := form.GetFormItemByLabel("Level").(*tview.DropDown).GetCurrentOption()
+			log.Printf("Setting Debug Level for %s/%s/%s to %s\n", namespace, podName, containerName, debugLevel)
+			if kc.SetDebugLevel(namespace, podName, containerName, debugLevel) {
+				log.Printf("[green]Debug Level set successfully for Container: %s Pod: %s Namespace: %s[-]\n", containerName, podName, namespace)
+			} else {
+				log.Printf("[red]Error setting Debug for Container: %s Pod: %s Namespace: %s[-]\n", containerName, podName, namespace)
+			}
+			pages.SwitchToPage("main")
+			pages.RemovePage("modal")
+		})
+		form.AddButton("Cancel", func() {
+			pages.SwitchToPage("main")
+			pages.RemovePage("modal")
+		})
+		form.SetBorder(true).SetTitle("Set Debug Level")
+		modal := createModalForm(pages, form, 13, 80)
+		pages.AddPage("modal", modal, true, true)
+	}
 }
 
 func RedisStatus(pages *tview.Pages) func() {
@@ -244,7 +278,6 @@ func displayRedisStatus(r k8s.RedisStatus) {
 		log.Printf("| %-33s | %-15s | %-40s | %-50s | %-10s | %-10s | %-15s |\n", node.PodName, node.IP, node.ID, r.PodDetails[node.PodName].Worker, node.Zone, r.PodDetails[node.PodName].CPU, r.PodDetails[node.PodName].Memory)
 	}
 	hyphenFormatter()
-
 }
 
 func displayAlerts(alertList []k8s.Alert) {
@@ -263,11 +296,11 @@ func displayAlerts(alertList []k8s.Alert) {
 
 	for _, alert := range alertList {
 		// if alert.Severity == "critical" {
-		// 	alert.Severity = "[red]" + alert.Severity + "[-]"
+		// 	alert.Severity = "[red]" + alert.Severity + "[-:-]"
 		// } else if alert.Severity == "major" {
-		// 	alert.Severity = "[yellow]" + alert.Severity + "[-]"
+		// 	alert.Severity = "[yellow]" + alert.Severity + "[:-]"
 		// } else {
-		// 	alert.Severity = "[green]" + alert.Severity + "[-]"
+		// 	alert.Severity = "[green]" + alert.Severity + "[:-]"
 		// }
 
 		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", alert.AlertName, alert.Severity, alert.StartsAt, alert.PodName, alert.Summary)
