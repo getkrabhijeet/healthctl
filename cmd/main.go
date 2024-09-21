@@ -45,11 +45,6 @@ func createApplication() (app *tview.Application) {
 	logPanel := createTextViewPanel(app, "Output Terminal")
 	logPanel.SetDynamicColors(true)
 
-	// logPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
-	// 	app.SetFocus(logPanel)
-	// 	return action, event
-	// })
-
 	//do not print date and time
 	log.SetFlags(0)
 	log.SetOutput(logPanel)
@@ -103,10 +98,6 @@ func createApplication() (app *tview.Application) {
 	commandList.AddItem("UPF Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("Storage Analysis", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
 	commandList.AddItem("Netpol Scan", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	// commandList.AddItem("Stop", "", 's', stop(infoUI))
-	// commandList.AddItem("Quit", "", 'q', func() {
-	// 	app.Stop()
-	// })
 
 	// create an observation flex with buttons to check alerts
 	afn_tools := tview.NewFlex().SetDirection(tview.FlexRow)
