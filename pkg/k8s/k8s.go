@@ -28,12 +28,15 @@ import (
 )
 
 var kubeconfig *string
+var contextFlag *string
 
 func init() {
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+		contextFlag = flag.String("context", "", "")
 	} else {
 		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+		contextFlag = flag.String("context", "", "")
 	}
 }
 
@@ -99,11 +102,53 @@ func (kc *K8sClient) GetClusterInfo() (string, error) {
 
 // Set context for the client
 func (kc *K8sClient) SetContext(config *clientcmdapi.Config, contextToSwitch string) {
-	for _, contexts := range config.Contexts {
+
+	for key, contexts := range config.Contexts {
 		if contexts.Cluster == contextToSwitch {
-			config.CurrentContext = contextToSwitch
+			config.CurrentContext = key
 		}
 	}
+	// Write the config back to the kubeconfig file
+	clientcmd.ModifyConfig(clientcmd.NewDefaultPathOptions(), *config, false)
+	//load the client again with config
+	client, err := CreateK8sClientSet()
+	if err != nil {
+		panic(err.Error())
+	}
+	kc.Client = client
+	dclient, err := CreateDynamicClientSet()
+	if err != nil {
+		panic(err.Error())
+	}
+	kc.DynamicClient = dclient
+
+}
+
+func (kc *K8sClient) GetCurrentContext() string {
+	//get context from kubeconfig
+	config := GetClustersFromKubeConfig()
+	return config.CurrentContext
+}
+
+func (kc *K8sClient) GetCurrentCluster() string {
+	cluster := ""
+	config := GetClustersFromKubeConfig()
+	for key, contexts := range config.Contexts {
+		if key == config.CurrentContext {
+			cluster = contexts.Cluster
+		}
+	}
+	return cluster
+}
+
+// Get Cluster Nodes names returns the cluster node name as a list
+func (kc *K8sClient) GetClusterNodesName() []string {
+	nodes, _ := kc.Client.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	nodeNames := []string{}
+	for _, node := range nodes.Items {
+		nodeNames = append(nodeNames, node.Name)
+	}
+	return nodeNames
 }
 
 // GetClusterNodes returns the cluster nodes

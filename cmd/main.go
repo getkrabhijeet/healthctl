@@ -194,6 +194,11 @@ func FlushRedis(pages *tview.Pages) func() {
 	}
 }
 
+func GetSelectedCluster() string {
+	kc, _ := k8s.NewK8sClient()
+	return kc.GetCurrentCluster()
+}
+
 func Alerts(pages *tview.Pages) func() {
 	kc, _ := k8s.NewK8sClient()
 	return func() {
@@ -429,8 +434,6 @@ func centerText(text string, width int) string {
 
 func runTests(selectedCommand string) {
 	kc, _ := k8s.NewK8sClient()
-	//config := k8s.GetClustersFromKubeConfig()
-	//kc.SetContext(config, selectedCluster)
 	rl := []models.ResourceCheck{}
 	switch selectedCommand {
 	case HEALTH_K8s:
@@ -499,6 +502,7 @@ func sendCommand(pages *tview.Pages, infoUI *testInfoUI, selectedCommand string)
 		}
 
 		form := tview.NewForm()
+		form.SetBackgroundColor(tcell.ColorDarkSlateGray)
 		form.AddButton("Start", func() {
 			startFunc(selectedCommand)
 		})
@@ -507,7 +511,7 @@ func sendCommand(pages *tview.Pages, infoUI *testInfoUI, selectedCommand string)
 		form.SetButtonsAlign(tview.AlignCenter)
 
 		form.SetBorder(true).SetTitle("Confirmation")
-		form.AddTextView(fmt.Sprintf("Executing %s command on %s cluster", selectedCommand, "kubernetes"), "", 0, 1, false, false)
+		form.AddTextView(fmt.Sprintf("Executing %s command on %s cluster", selectedCommand, GetSelectedCluster()), "", 0, 1, false, false)
 
 		modal := createModalForm(pages, form, 13, 80)
 
