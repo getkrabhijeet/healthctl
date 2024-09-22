@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"healthctl/pkg/k8s"
 	"healthctl/pkg/models"
@@ -38,100 +39,75 @@ var Logo = []string{
 	`                                         `,
 }
 
+var HEALTH_K8s = "K8s health"
+var HEALTH_INFRA = "Infra health"
+var HEALTH_PAAS = "PAAS health"
+var HEALTH_SMF = "SMF health"
+var HEALTH_UPF = "UPF health"
+var HEALTH_STORAGE = "Storage health"
+var ACTIVE_ALERTS = "Active Alerts"
+var HEALTH_REDIS = "Redis status"
+var COLLECT_KARGO = "Collect Kargo"
+var SET_DEBUG_LEVEL = "Set Debug Level"
+var FLUSH_REDIS = "Flush Redis"
+var PLACEHOLDER = "Placeholder"
+
 func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
 	pages := tview.NewPages()
 	infoUI := createInfoPanel(app)
 	logPanel := createTextViewPanel(app, "Output Terminal")
+	logPanel.SetBorder(true)
 	logPanel.SetDynamicColors(true)
+	logPanel.SetTextColor(tcell.ColorWhite)
 
 	//do not print date and time
 	log.SetFlags(0)
 	log.SetOutput(logPanel)
-	log.Println("[green::b:]Welcome to HealthCtl[-::-:]")
-	log.Println("[green]Version: v1.0[-]")
-	log.Println("[green]This is a tool to run sanity checks on k8s clusters and NFs in K8s clusters[-]")
-	log.Println("[green]Check Alerts, SMF status, UPF Status, Redis Status, Collect Kargo, Set Debug levels and Flush Redis.[-]")
+	log.Println("Welcome to HealthCtl")
+	log.Println(" [green]✔[-] Version: v1.0")
+	log.Println(" [green]✔[-] This is a tool to run sanity checks on k8s clusters and NFs in K8s clusters")
+	log.Println(" [green]✔[-] Check Alerts, SMF status, UPF Status, Redis Status, Collect Kargo, Set Debug levels and Flush Redis.")
+	log.Println(" [green]✔[-] Use shortcuts to run tests, stop tests, open reports, view alerts and run Popeye.")
+	log.Println(" [green]✔[-] Use ctrl+r to run tests, ctrl+s to stop tests, ctrl+o to open reports, a to view alerts and ctrl+p to run Popeye.")
+	log.Println(" [green]✔[-] Use arrow keys to navigate and enter to select.")
+	log.Println(" [green]✔[-] Use esc to go back to main menu.")
+	log.Println(" [green]✔[-] Use q to quit the application.")
+	log.Println(" [green]✔[-] Use tab to navigate between tools and output terminal.")
+	log.Println(" [green]✔[-] Use mouse to click the buttons in tools.")
 
-	kc, _ := k8s.NewK8sClient()
-	kc.GetClusterInfo()
-	clusterList := createList("Clusters")
-	config := k8s.GetClustersFromKubeConfig()
-	for index, _ := range config.Clusters {
-		clusterList.AddItem(index, "", 0, nil)
+	var CreateNewButton func(label string, handler func()) *tview.Button
+	CreateNewButton = func(label string, handler func()) *tview.Button {
+		button := tview.NewButton(label)
+		button.SetBackgroundColor(tcell.ColorGrey)
+		button.SetLabelColor(tcell.ColorYellow)
+		button.SetBorderColor(tcell.ColorYellow)
+		button.SetBorder(true)
+		button.SetSelectedFunc(handler)
+		button.SetBackgroundColorActivated(tcell.ColorYellow)
+		return button
 	}
-	handler := func(index int, mainText, secondaryText string, shortcut rune) {
-		kc.SetContext(config, mainText)
-		infoUI.context.SetText(config.CurrentContext)
-		infoUI.cluster.SetText(mainText)
-		nodes := kc.GetClusterNodes()
-		infoUI.nodes.SetText(fmt.Sprintf("Master: %d, Worker: %d", nodes[0], nodes[1]))
-		infoUI.apiserver.SetText(config.Clusters[mainText].Server)
-		pages.SwitchToPage("main")
-	}
-	clusterList.SetChangedFunc(handler)
 
-	commandList := createList("Operations")
-	commandList.AddItem("K8s Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	commandList.AddItem("Infra Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	commandList.AddItem("PAAS Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	commandList.AddItem("SMF Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	commandList.AddItem("UPF Sanity", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	commandList.AddItem("Storage Analysis", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
-	commandList.AddItem("Netpol Scan", "", 0, sendCommand(pages, infoUI, clusterList, commandList))
+	afn_tools := tview.NewFlex()
+	afn_tools.SetDirection(tview.FlexRow)
+	afn_tools.SetBorder(true).SetTitle("Tools")
+	afn_tools.AddItem(CreateNewButton(HEALTH_K8s, sendCommand(pages, infoUI, HEALTH_K8s)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(HEALTH_INFRA, sendCommand(pages, infoUI, HEALTH_INFRA)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(HEALTH_PAAS, sendCommand(pages, infoUI, HEALTH_PAAS)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(HEALTH_SMF, sendCommand(pages, infoUI, HEALTH_SMF)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(HEALTH_UPF, sendCommand(pages, infoUI, HEALTH_UPF)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(HEALTH_STORAGE, sendCommand(pages, infoUI, HEALTH_STORAGE)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(ACTIVE_ALERTS, Alerts(pages)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(HEALTH_REDIS, RedisStatus(pages)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(COLLECT_KARGO, func() {}), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(SET_DEBUG_LEVEL, SetDebugLevel(pages)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(FLUSH_REDIS, FlushRedis(pages)), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(PLACEHOLDER, func() {}), 0, 1, false)
 
-	// create an observation flex with buttons to check alerts
-	afn_tools := tview.NewFlex().SetDirection(tview.FlexRow)
-	afn_tools.AddItem(tview.NewButton("Alerts").SetSelectedFunc(Alerts(pages)), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("SMF Status").SetSelectedFunc(func() {}), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("UPF Status").SetSelectedFunc(func() {}), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Redis status").SetSelectedFunc(RedisStatus(pages)), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Collect Kargo").SetSelectedFunc(func() {}), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Set Debug Level").SetSelectedFunc(SetDebugLevel(pages)), 3, 1, false)
-	afn_tools.AddItem(tview.NewButton("Flush Redis").SetSelectedFunc(FlushRedis(pages)), 3, 1, false)
-
-	// Set focus navigation
-	clusterList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTab:
-			app.SetFocus(commandList)
-			return nil
-		case tcell.KeyBacktab:
-			app.SetFocus(logPanel)
-			return nil
-		}
-		return event
-	})
-
-	commandList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTab:
-			app.SetFocus(logPanel)
-			return nil
-		case tcell.KeyBacktab:
-			app.SetFocus(clusterList)
-			return nil
-		}
-		return event
-	})
-
-	logPanel.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTab:
-			app.SetFocus(clusterList)
-			return nil
-		case tcell.KeyBacktab:
-			app.SetFocus(commandList)
-			return nil
-		}
-		return event
-	})
-
-	layout := createMainLayout(infoUI, clusterList, commandList, logPanel, afn_tools)
+	layout := createMainLayout(infoUI, logPanel, afn_tools, pages)
 	pages.AddPage("main", layout, true, true)
 
 	app.SetRoot(pages, true).EnableMouse(true)
-
 	return app
 }
 
@@ -140,9 +116,10 @@ func SetDebugLevel(pages *tview.Pages) func() {
 	return func() {
 		//open a new popup with a form to take input like namespace, podname, container name and debug level
 		form := tview.NewForm()
+		//form.SetBackgroundColor(tcell.ColorDarkCyan)
 		var namespaceSelection, podSelection, containerSelection, levelSelection *tview.DropDown
-
 		namespaceSelection = tview.NewDropDown()
+		//namespaceSelection.SetBackgroundColor(tcell.ColorLightCyan)
 		namespaceSelection.SetOptions(kc.GetClusterNamespaces(), func(text string, index int) {
 			//get all pods in selected namespace
 			podSelection.SetOptions(kc.GetPods(text), func(text string, index int) {
@@ -150,12 +127,12 @@ func SetDebugLevel(pages *tview.Pages) func() {
 				containerSelection.SetOptions(kc.GetContainers(text), func(text string, index int) {
 					//Set level selection
 					levelSelection.SetOptions([]string{"DEBUG_1", "DEBUG_2", "DEBUG_3"}, nil).SetLabel("Level")
-
 				}).SetLabel("Container")
 			}).SetLabel("Pod")
 		}).SetLabel("Namespace")
 
 		podSelection = tview.NewDropDown()
+		//podSelection.SetBackgroundColor(tcell.ColorLightCyan)
 		containerSelection = tview.NewDropDown()
 		levelSelection = tview.NewDropDown()
 
@@ -177,11 +154,11 @@ func SetDebugLevel(pages *tview.Pages) func() {
 			}
 			pages.SwitchToPage("main")
 			pages.RemovePage("modal")
-		})
+		}).SetButtonsAlign(tview.AlignCenter)
 		form.AddButton("Cancel", func() {
 			pages.SwitchToPage("main")
 			pages.RemovePage("modal")
-		})
+		}).SetButtonsAlign(tview.AlignCenter)
 		form.SetBorder(true).SetTitle("Set Debug Level")
 		modal := createModalForm(pages, form, 13, 80)
 		pages.AddPage("modal", modal, true, true)
@@ -194,7 +171,6 @@ func RedisStatus(pages *tview.Pages) func() {
 		clearLogPanel(pages)
 		redisStatus := kc.GetRedisStatus()
 		displayRedisStatus(redisStatus)
-
 	}
 }
 
@@ -281,37 +257,33 @@ func displayRedisStatus(r k8s.RedisStatus) {
 }
 
 func displayAlerts(alertList []k8s.Alert) {
+
 	equalFormatter := func() {
-		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "=================================", "========", "========================", "===================================", "==============================")
-	}
-	hyphenFormatter := func() {
-		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "---------------------------------", "--------", "------------------------", "-----------------------------------", "------------------------------")
+		log.Printf("| %-33s | %-8s | %-24s | %-40s | %-40s\n", "─────────────────────────────────", "────────", "────────────────────────", "────────────────────────────────────────", "────────────────────────────────────────")
 	}
 
 	//clear logPanel
 
 	equalFormatter()
-	log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "Alertname", "Severity", "Starts At", "Pod Name", "Summary")
+	log.Printf("| %-33s | %-8s | %-24s | %-40s | %-40s\n", centerText("Alertname", 33), centerText("Severity", 8), centerText("Starts At", 24), centerText("Pod Name", 40), centerText("Summary", 40))
 	equalFormatter()
 
 	for _, alert := range alertList {
-		// if alert.Severity == "critical" {
-		// 	alert.Severity = "[red]" + alert.Severity + "[-:-]"
-		// } else if alert.Severity == "major" {
-		// 	alert.Severity = "[yellow]" + alert.Severity + "[:-]"
-		// } else {
-		// 	alert.Severity = "[green]" + alert.Severity + "[:-]"
-		// }
+		if alert.Severity == "critical" {
+			alert.Severity = "[red]" + alert.Severity + "[-:-]"
+		} else if alert.Severity == "major" {
+			alert.Severity = "[yellow]" + alert.Severity + "[-:-]   "
+		} else {
+			alert.Severity = "[green]" + alert.Severity + "[-:-] "
+		}
 
-		log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", alert.AlertName, alert.Severity, alert.StartsAt, alert.PodName, alert.Summary)
-		hyphenFormatter()
+		log.Printf("| %-33s | %-8s | %-24s | %-40s | %-40s\n", alert.AlertName, alert.Severity, alert.StartsAt, alert.PodName, alert.Summary)
+		equalFormatter()
 	}
-	log.Printf("| %-33s | %-8s | %-24s | %-35s | %-30s\n", "", "", "", "Total Alerts", strconv.Itoa(len(alertList)))
+	log.Printf("| %-33s | %-8s | %-24s | %s | %-40s\n", "", "", "", centerText("Total Alerts", 40), strconv.Itoa(len(alertList)))
 	equalFormatter()
 }
-
-func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primitive, output tview.Primitive, afn_tools *tview.Flex) (layout *tview.Flex) {
-	///// Main Layout /////
+func createMetadataPanel(infoUI *testInfoUI) *tview.Table {
 	metadata := tview.NewTable()
 	metadata.SetBorder(true).SetTitle("Cluster Details")
 
@@ -334,6 +306,33 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	metadata.GetCell(3, 0).SetAlign(tview.AlignLeft)
 	infoUI.apiserver = tview.NewTableCell("0")
 	metadata.SetCell(3, 1, infoUI.apiserver)
+	return metadata
+}
+
+func createMainLayout(infoUI *testInfoUI, output tview.Primitive, afn_tools *tview.Flex, pages *tview.Pages) (layout *tview.Flex) {
+	///// Main Layout /////
+	metadata := createMetadataPanel(infoUI)
+
+	kc, _ := k8s.NewK8sClient()
+	config := k8s.GetClustersFromKubeConfig()
+	clusters := []string{}
+	for index, _ := range config.Clusters {
+		clusters = append(clusters, index)
+	}
+	handler := func(text string, index int) {
+		kc.SetContext(config, text)
+		infoUI.context.SetText(config.CurrentContext)
+		infoUI.cluster.SetText(text)
+		nodes := kc.GetClusterNodes()
+		infoUI.nodes.SetText(fmt.Sprintf("Master: %d, Worker: %d", nodes[0], nodes[1]))
+		infoUI.apiserver.SetText(config.Clusters[text].Server)
+		pages.SwitchToPage("main")
+	}
+
+	form := tview.NewForm()
+	cluster := tview.NewDropDown()
+	cluster.SetOptions(clusters, handler).SetCurrentOption(0).SetFieldWidth(30).SetLabel("Cluster")
+	form.AddFormItem(cluster).SetBorder(true).SetTitle("Cluster Selection")
 
 	commands := tview.NewTable()
 	commands.SetBorder(true).SetTitle("Shortcuts")
@@ -369,17 +368,19 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 	commands.SetCell(5, 1, tview.NewTableCell("none"))
 
 	banner := tview.NewTable()
-	banner.SetBorder(false)
+	banner.SetBorder(true)
 	for i := 0; i < 7; i++ {
-		banner.SetCell(i+1, 0, tview.NewTableCell(Logo[i]))
-		banner.GetCell(i+1, 0).SetAlign(tview.AlignRight).SetBackgroundColor(tcell.ColorGreen)
+		banner.SetCell(i+1, 0, tview.NewTableCell(Logo[i]).SetTextColor(tcell.ColorYellow))
+		banner.GetCell(i+1, 0).SetAlign(tview.AlignRight)
 	}
 
-	mainLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(clusterList, 20, 0, true).
-		AddItem(commandList, 20, 0, true).
-		AddItem(output, 0, 30, false).
-		AddItem(afn_tools, 20, 0, false)
+	mainLayout := tview.NewFlex()
+	mainLayout.SetDirection(tview.FlexColumn).
+		// AddItem(clusterList, 20, 0, true).
+		// AddItem(commandList, 20, 0, true).
+		AddItem(afn_tools, 30, 0, false).
+		AddItem(output, 0, 30, false)
+	mainLayout.SetBackgroundColor(tcell.ColorGrey)
 
 	info := tview.NewTextView()
 	info.SetBorder(true)
@@ -388,6 +389,7 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 
 	header := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
+		AddItem(form, 0, 1, false).
 		AddItem(metadata, 0, 1, false).
 		AddItem(commands, 0, 1, false).
 		AddItem(banner, 43, 1, false)
@@ -411,74 +413,73 @@ func createMainLayout(infoUI *testInfoUI, clusterList, commandList tview.Primiti
 
 func clearLogPanel(pages *tview.Pages) {
 	_, layout := pages.GetFrontPage()
-	layout.(*tview.Flex).GetItem(1).(*tview.Flex).GetItem(0).(*tview.Flex).GetItem(2).(*tview.TextView).Clear()
+	layout.(*tview.Flex).GetItem(1).(*tview.Flex).GetItem(0).(*tview.Flex).GetItem(1).(*tview.TextView).Clear()
 }
 
-func runTests(selectedCluster string, selectedCommand string) {
+func centerText(text string, width int) string {
+	// Calculate padding on both sides
+	padding := (width - len(text)) / 2
+	if padding > 0 {
+		// If padding is positive, center the text
+		return strings.Repeat(" ", padding) + text + strings.Repeat(" ", width-len(text)-padding)
+	}
+	// If text is longer than width, just return it as is
+	return text
+}
+
+func runTests(selectedCommand string) {
 	kc, _ := k8s.NewK8sClient()
-	config := k8s.GetClustersFromKubeConfig()
-	kc.SetContext(config, selectedCluster)
+	//config := k8s.GetClustersFromKubeConfig()
+	//kc.SetContext(config, selectedCluster)
 	rl := []models.ResourceCheck{}
-	if selectedCommand == "K8s Sanity" {
-		log.Println("Running K8s Sanity")
+	switch selectedCommand {
+	case HEALTH_K8s:
 		rl = testsuite.CheckK8s(kc.Client)
-	} else if selectedCommand == "Infra Sanity" {
-		log.Println("Running INFRA Sanity")
+		break
+	case HEALTH_INFRA:
 		rl = testsuite.CheckINFRA(kc.Client)
-	} else if selectedCommand == "PAAS Sanity" {
-		log.Println("Running PAAS Sanity")
+		break
+	case HEALTH_PAAS:
 		rl = testsuite.CheckPAAS(kc.Client)
-	} else if selectedCommand == "SMF Sanity" {
-		log.Println("Running SMF Sanity")
+		break
+	case HEALTH_SMF:
 		rl = testsuite.CheckSMF(kc.Client)
-	} else if selectedCommand == "UPF Sanity" {
-		log.Println("Running UPF Sanity")
-	} else {
+		break
+	case HEALTH_UPF:
+		rl = testsuite.CheckUPF(kc.Client)
+		break
+	case HEALTH_STORAGE:
+		rl = testsuite.CheckStorage(kc.Client)
+		break
+	default:
 		log.Printf("Please select a test to run")
 	}
 
 	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
-	log.Printf("| %-5s | %-150s | %-7s |\n", "No.", "Test Summary", "Result")
+	log.Printf("| %s | %s | %s  |\n", centerText("No.", 5), centerText("Test Summary", 150), centerText("Result", 7))
 	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
 
 	status := ""
 	for index, resc := range rl {
 		if resc.Status {
-			status = "PASS"
+			status = "[:green::]PASS[:-::]"
 		} else {
-			status = "FAIL"
+			status = "[:red::]FAIL[:-::]"
 		}
-		log.Printf("| %-5s | %-150s | %-7s |\n", strconv.Itoa(index+1), resc.Details, status)
+		log.Printf("| %s | %-150s | %-7s %s|\n", centerText(strconv.Itoa(index+1), 5), resc.Details, status, "   ")
 		log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
 	}
-	log.Printf("| %-5s | %-150s | %-7s |\n", "", "Total Tests", strconv.Itoa(len(rl)))
-	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
-	for index, resc := range rl {
-
-		if resc.Status {
-			status = "PASS"
-		} else {
-			status = "FAIL"
-		}
-		log.Printf("| %-5s | %-150s | %-7s |\n", strconv.Itoa(index+1), resc.Details, status)
-		log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
-	}
-	log.Printf("| %-5s | %-150s | %-7s |\n", "", "Total Tests", strconv.Itoa(len(rl)))
+	log.Printf("| %-5s | %s | %-7s |\n", "", centerText("Total Tests", 150), strconv.Itoa(len(rl)))
 	log.Printf("| %-5s | %-150s | %-7s |\n", "─────", "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────", "──────")
 }
 
-func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List, commandList *tview.List) func() {
+func sendCommand(pages *tview.Pages, infoUI *testInfoUI, selectedCommand string) func() {
 	return func() {
-		selectedClusterIndex := clusterList.GetCurrentItem()
-		selectedCluster, _ := clusterList.GetItemText(selectedClusterIndex)
-		selectedCommandIndex := commandList.GetCurrentItem()
-		selectedCommand, _ := commandList.GetItemText(selectedCommandIndex)
-
-		startFunc := func(selectedCluster string, selectedCommand string) {
+		startFunc := func(selectedCommand string) {
 			stop(infoUI)()
 			pages.SwitchToPage("main")
 			clearLogPanel(pages)
-			runTests(selectedCluster, selectedCommand)
+			runTests(selectedCommand)
 			pages.RemovePage("modal")
 			ctx, cancel := context.WithCancel(context.Background())
 			infoUI.ctx = ctx
@@ -499,14 +500,14 @@ func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List
 
 		form := tview.NewForm()
 		form.AddButton("Start", func() {
-			startFunc(selectedCluster, selectedCommand)
+			startFunc(selectedCommand)
 		})
 		form.AddButton("Cancel", cancelFunc)
 		form.SetCancelFunc(cancelFunc)
 		form.SetButtonsAlign(tview.AlignCenter)
 
 		form.SetBorder(true).SetTitle("Confirmation")
-		form.AddTextView(fmt.Sprintf("Executing %s command on %s cluster", selectedCommand, selectedCluster), "", 0, 1, false, false)
+		form.AddTextView(fmt.Sprintf("Executing %s command on %s cluster", selectedCommand, "kubernetes"), "", 0, 1, false, false)
 
 		modal := createModalForm(pages, form, 13, 80)
 
@@ -516,7 +517,6 @@ func sendCommand(pages *tview.Pages, infoUI *testInfoUI, clusterList *tview.List
 }
 
 func createInfoPanel(app *tview.Application) (infoUI *testInfoUI) {
-	///// Info /////
 	infoPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 
 	infoUI = &testInfoUI{}
