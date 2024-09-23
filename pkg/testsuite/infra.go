@@ -55,7 +55,7 @@ func CheckMetallb(clientset *kubernetes.Clientset) models.ResourceCheck {
 	}
 
 	if len(pods.Items) == 0 {
-		return models.ResourceCheck{"MetalLB", "No MetalLB pods found", false}
+		return models.ResourceCheck{"metallb", "MetalLB is down", false}
 	}
 
 	// Check if MetalLB service is up

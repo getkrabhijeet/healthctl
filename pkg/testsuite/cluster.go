@@ -207,7 +207,7 @@ func checkEvents(clientset *kubernetes.Clientset) models.ResourceCheck {
 			}
 		}
 		if len(errorEvents) > 0 {
-			details = fmt.Sprintf("Warning events found: %s", errorEvents)
+			details = fmt.Sprintf("Warning events found: %d", len(errorEvents))
 		} else {
 			details = "No critical issues found in events."
 		}
