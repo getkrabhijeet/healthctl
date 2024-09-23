@@ -626,6 +626,18 @@ func (kc *K8sClient) SetDebugLevel(namespace, pod, container, debugLevel string)
 	return true
 }
 
+func (kc *K8sClient) GetKargoServiceIP() (string, error) {
+	service, err := kc.Client.CoreV1().Services("fed-paas-helpers").Get(context.Background(), "kargo", metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	if len(service.Status.LoadBalancer.Ingress) == 0 {
+		return "", fmt.Errorf("no LoadBalancer Ingress found for kargo service")
+	}
+
+	return service.Status.LoadBalancer.Ingress[0].IP, nil
+}
 type ResourceUsageReport struct {
 	PodsUsage []PodUsage
 }
@@ -724,4 +736,3 @@ func (kc *K8sClient) GetResourceUsageReport() ResourceUsageReport {
 
 	}
 	return report
-}
