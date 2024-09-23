@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -99,7 +102,7 @@ func createApplication() (app *tview.Application) {
 	afn_tools.AddItem(CreateNewButton(HEALTH_STORAGE, sendCommand(pages, infoUI, HEALTH_STORAGE)), 0, 1, false)
 	afn_tools.AddItem(CreateNewButton(ACTIVE_ALERTS, Alerts(pages)), 0, 1, false)
 	afn_tools.AddItem(CreateNewButton(HEALTH_REDIS, RedisStatus(pages)), 0, 1, false)
-	afn_tools.AddItem(CreateNewButton(COLLECT_KARGO, func() {}), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(COLLECT_KARGO, CollectKargo(pages)), 0, 1, false)
 	afn_tools.AddItem(CreateNewButton(SET_DEBUG_LEVEL, SetDebugLevel(pages)), 0, 1, false)
 	afn_tools.AddItem(CreateNewButton(FLUSH_REDIS, FlushRedis(pages)), 0, 1, false)
 	afn_tools.AddItem(CreateNewButton(PLACEHOLDER, func() {}), 0, 1, false)
@@ -163,6 +166,98 @@ func SetDebugLevel(pages *tview.Pages) func() {
 		modal := createModalForm(pages, form, 13, 80)
 		pages.AddPage("modal", modal, true, true)
 	}
+}
+
+func CollectKargo(pages *tview.Pages) func() {
+
+	return func() {
+		clearLogPanel(pages)
+		form := tview.NewForm()
+
+		startTimeInput := tview.NewInputField().
+			SetLabel("Start Time (ISO8601): ").
+			SetFieldWidth(30)
+		durationInput := tview.NewInputField().
+			SetLabel("Duration (positive number): ").
+			SetFieldWidth(30)
+		profileInput := tview.NewInputField().
+			SetLabel("Profile (namespace:profile): ").
+			SetFieldWidth(30)
+
+		form.AddFormItem(startTimeInput)
+		form.AddFormItem(durationInput)
+		form.AddFormItem(profileInput)
+		form.AddButton("Submit", func() {
+			startTime := startTimeInput.GetText()
+			duration := durationInput.GetText()
+			profile := profileInput.GetText()
+
+			durationInt, err := strconv.Atoi(duration)
+			if err != nil {
+				log.Printf("[red]Invalid duration: %s[-]\n", duration)
+				return
+			}
+
+			config := map[string]string{
+				"startTime": startTime,
+				"duration":  strconv.Itoa(durationInt),
+				"profile":   profile,
+			}
+
+			log.Printf("Collecting Kargo with Start Time: %s, Duration: %s, Profile: %s\n", startTime, duration, profile)
+			executeKargoDump(config)
+			log.Printf("[green]Kargo collected with Start Time: %s, Duration: %s, Profile: %s[-]\n", startTime, duration, profile)
+			pages.SwitchToPage("main")
+			pages.RemovePage("modal")
+		})
+		form.AddButton("Cancel", func() {
+			pages.SwitchToPage("main")
+			pages.RemovePage("modal")
+		})
+		form.SetBorder(true).SetTitle("Collect Kargo")
+		modal := createModalForm(pages, form, 13, 80)
+		pages.AddPage("modal", modal, true, true)
+	}
+}
+
+func executeKargoDump(config map[string]string) {
+	kc, _ := k8s.NewK8sClient()
+	kargoServiceIP, err := kc.GetKargoServiceIP()
+	if err != nil {
+		log.Println("Error getting Kargo service IP:", err)
+		return
+	}
+	kargoPort := "5555"
+	url := fmt.Sprintf("http://%s:%s/kargo/api/v1/collect", kargoServiceIP, kargoPort)
+
+	client := &http.Client{}
+	jsonData, err := json.Marshal(config)
+	if err != nil {
+		log.Println("Error marshalling config to JSON:", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Println("Error creating HTTP request:", err)
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending HTTP request:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("Error: received non-OK response status:", resp.Status)
+		return
+	}
+
+	log.Println("Successfully sent POST request to Kargo service")
 }
 
 func RedisStatus(pages *tview.Pages) func() {
