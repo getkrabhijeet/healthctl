@@ -41,7 +41,7 @@ func checkNodes(clientset *kubernetes.Clientset) models.ResourceCheck {
 		nodeNames[i] = node.Name
 	}
 
-	return models.ResourceCheck{Label: "Nodes", Details: fmt.Sprintf("%d nodes found: %s", len(nodes.Items), nodeNames), Status: true}
+	return models.ResourceCheck{Label: "Nodes", Details: fmt.Sprint("Number of nodes : ", len(nodes.Items)), Status: true}
 }
 
 func checkPods(clientset *kubernetes.Clientset) models.ResourceCheck {
