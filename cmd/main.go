@@ -53,7 +53,7 @@ var HEALTH_REDIS = "Redis status"
 var COLLECT_KARGO = "Collect Kargo"
 var SET_DEBUG_LEVEL = "Set Debug Level"
 var FLUSH_REDIS = "Flush Redis"
-var PLACEHOLDER = "Placeholder"
+var RESOURCE_USAGE = "Resource Usage"
 
 func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
@@ -117,7 +117,7 @@ func createApplication() (app *tview.Application) {
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(FLUSH_REDIS, FlushRedis(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
-	afn_tools.AddItem(CreateNewButton(PLACEHOLDER, func() {}), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(RESOURCE_USAGE, DisplayResourceUsageReport(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 
 	layout := createMainLayout(infoUI, logPanel, afn_tools, pages)
@@ -691,9 +691,62 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 	return modal
 }
 
+func DisplayResourceUsageReport(pages *tview.Pages) func() {
+	return func() {
+		clearLogPanel(pages)
+		kc, _ := k8s.NewK8sClient()
+		kc.GetResourceUsageReport()
+		r := kc.GetResourceUsageReport()
+		for _, res := range r.PodsUsage {
+			for _, containerUsage := range res.ContainerUsages {
+				log.Println("Pod    :", res.PodName)
+				log.Printf("Container: %s", containerUsage.Name)
+				log.Printf("Memory: %s\nCPU   : %s\n", createProgressBarMemory(containerUsage.MemoryUsage, 10), createProgressBarCPU(containerUsage.CPUUsage, 100))
+			}
+		}
+	}
+}
+
+func createProgressBarCPU(percentage float64, barLength int) string {
+	// Determine how many blocks to fill based on the percentage
+	filledLength := int((percentage / 100) * float64(barLength))
+
+	// Create the filled part of the bar
+	filledBar := ""
+	for i := 0; i < filledLength; i++ {
+		filledBar += "█"
+	}
+
+	// Create the unfilled part of the bar
+	unfilledBar := ""
+	for i := 0; i < barLength-filledLength; i++ {
+		unfilledBar += " "
+	}
+
+	// Return the combined progress bar string
+	return fmt.Sprintf("[blue]%s[white]%s", filledBar, unfilledBar)
+}
+func createProgressBarMemory(percentage float64, barLength int) string {
+	// Determine how many blocks to fill based on the percentage
+	filledLength := int((percentage / 100) * float64(barLength))
+
+	// Create the filled part of the bar
+	filledBar := ""
+	for i := 0; i < filledLength; i++ {
+		filledBar += "█"
+	}
+
+	// Create the unfilled part of the bar
+	unfilledBar := ""
+	for i := 0; i < barLength-filledLength; i++ {
+		unfilledBar += " "
+	}
+
+	// Return the combined progress bar string
+	return fmt.Sprintf("[orange]%s[white]%s", filledBar, unfilledBar)
+}
+
 func main() {
-	// kc, _ := k8s.NewK8sClient()
-	// fmt.Println(kc.GetResourceUsageReport())
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
