@@ -736,3 +736,4 @@ func (kc *K8sClient) GetResourceUsageReport() ResourceUsageReport {
 
 	}
 	return report
+}
