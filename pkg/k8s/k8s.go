@@ -24,7 +24,10 @@ import (
 
 	"k8s.io/client-go/kubernetes/scheme"
 
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/tools/remotecommand"
+	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 var kubeconfig *string
@@ -43,6 +46,7 @@ func init() {
 type K8sClient struct {
 	Client        *kubernetes.Clientset
 	DynamicClient dynamic.Interface
+	MetricsClient *metrics.Clientset
 }
 
 func GetClustersFromKubeConfig() *clientcmdapi.Config {
@@ -71,6 +75,15 @@ func CreateDynamicClientSet() (dynamic.Interface, error) {
 		panic(err.Error())
 	}
 	return dynamic.NewForConfig(config)
+}
+
+func CreateMetricsClientSet() (*metrics.Clientset, error) {
+	flag.Parse()
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+	return metrics.NewForConfig(config)
 }
 
 func NewK8sClient() (*K8sClient, error) {
@@ -121,6 +134,12 @@ func (kc *K8sClient) SetContext(config *clientcmdapi.Config, contextToSwitch str
 		panic(err.Error())
 	}
 	kc.DynamicClient = dclient
+
+	metricsClient, err := CreateMetricsClientSet()
+	if err != nil {
+		panic(err.Error())
+	}
+	kc.MetricsClient = metricsClient
 
 }
 
@@ -605,4 +624,104 @@ func (kc *K8sClient) SetDebugLevel(namespace, pod, container, debugLevel string)
 
 	fmt.Println(stdout)
 	return true
+}
+
+type ResourceUsageReport struct {
+	PodsUsage []PodUsage
+}
+type PodUsage struct {
+	PodName    string
+	Namespace  string
+	Containers []ContainerUsage
+}
+
+type ContainerUsage struct {
+	Name        string
+	CPUUsage    float64
+	MemoryUsage float64
+}
+
+func GetCPUUsagePercentage(usage, request resource.Quantity) float64 {
+	if request.IsZero() {
+		return 0
+	}
+	return float64(usage.MilliValue()) / float64(request.MilliValue()) * 100
+}
+
+// GetMemoryUsagePercentage calculates the memory usage percentage compared to the requested memory
+func GetMemoryUsagePercentage(usage, request resource.Quantity) float64 {
+	if request.IsZero() {
+		return 0
+	}
+	return float64(usage.Value()) / float64(request.Value()) * 100
+}
+
+func (kc *K8sClient) GetResourceUsageReport() ResourceUsageReport {
+	report := ResourceUsageReport{}
+	podusage := PodUsage{}
+	containerusage := ContainerUsage{}
+
+	// List all pods in all namespaces
+	// Get all pods in all namespaces
+	pods, err := kc.Client.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Fatalf("Error fetching pods: %v", err)
+	}
+
+	// Get metrics for all pods in all namespaces
+	podMetricsList, err := kc.MetricsClient.MetricsV1beta1().PodMetricses("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Fatalf("Error fetching pod metrics: %v", err)
+	}
+
+	// Create a map of pod metrics by name/namespace for easier lookup
+	podMetricsMap := make(map[string]metricsv1beta1.PodMetrics)
+	for _, podMetrics := range podMetricsList.Items {
+
+		key := fmt.Sprintf("%s/%s", podMetrics.Namespace, podMetrics.Name)
+		podMetricsMap[key] = podMetrics
+	}
+
+	// Iterate over the pods and fetch CPU and memory usage
+	for _, pod := range pods.Items {
+
+		podusage.PodName = pod.Name
+		podusage.Namespace = pod.Namespace
+
+		podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+		if podMetrics, found := podMetricsMap[podKey]; found {
+			fmt.Printf("Pod: %s/%s\n", pod.Namespace, pod.Name)
+			for _, container := range pod.Spec.Containers {
+				// Find corresponding metrics for the container
+				for _, containerMetrics := range podMetrics.Containers {
+					if container.Name == containerMetrics.Name {
+						// Get container resource requests
+						requestedCPU := container.Resources.Requests[v1.ResourceCPU]
+						requestedMemory := container.Resources.Requests[v1.ResourceMemory]
+
+						// Get container usage
+						usedCPU := containerMetrics.Usage[v1.ResourceCPU]
+						usedMemory := containerMetrics.Usage[v1.ResourceMemory]
+
+						// Calculate percentages
+						cpuPercentage := GetCPUUsagePercentage(usedCPU, requestedCPU)
+						memoryPercentage := GetMemoryUsagePercentage(usedMemory, requestedMemory)
+
+						containerusage.CPUUsage = cpuPercentage
+						containerusage.MemoryUsage = memoryPercentage
+						podusage.Containers = append(podusage.Containers, containerusage)
+						// // Print the result
+						// fmt.Printf("  Container: %s\n", container.Name)
+						// fmt.Printf("    CPU: %s used, %s requested, %.2f%% of request\n", usedCPU.String(), requestedCPU.String(), cpuPercentage)
+						// fmt.Printf("    Memory: %s used, %s requested, %.2f%% of request\n", usedMemory.String(), requestedMemory.String(), memoryPercentage)
+					}
+				}
+			}
+			report.PodsUsage = append(report.PodsUsage, podusage)
+		} else {
+			fmt.Printf("No metrics available for pod: %s/%s\n", pod.Namespace, pod.Name)
+		}
+
+	}
+	return report
 }

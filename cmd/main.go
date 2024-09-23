@@ -80,11 +80,11 @@ func createApplication() (app *tview.Application) {
 	CreateNewButton = func(label string, handler func()) *tview.Button {
 		button := tview.NewButton(label)
 		button.SetBackgroundColor(tcell.ColorGrey)
-		button.SetLabelColor(tcell.ColorYellow)
-		button.SetBorderColor(tcell.ColorYellow)
-		button.SetBorder(true)
+		button.SetLabelColor(tcell.ColorBlack)
+		button.SetBorderColor(tcell.ColorBlack)
+		button.SetBorder(false)
 		button.SetSelectedFunc(handler)
-		button.SetBackgroundColorActivated(tcell.ColorYellow)
+		button.SetBackgroundColorActivated(tcell.ColorBlack)
 		return button
 	}
 
@@ -92,17 +92,30 @@ func createApplication() (app *tview.Application) {
 	afn_tools.SetDirection(tview.FlexRow)
 	afn_tools.SetBorder(true).SetTitle("Tools")
 	afn_tools.AddItem(CreateNewButton(HEALTH_K8s, sendCommand(pages, infoUI, HEALTH_K8s)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
+
 	afn_tools.AddItem(CreateNewButton(HEALTH_INFRA, sendCommand(pages, infoUI, HEALTH_INFRA)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(HEALTH_PAAS, sendCommand(pages, infoUI, HEALTH_PAAS)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(HEALTH_SMF, sendCommand(pages, infoUI, HEALTH_SMF)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(HEALTH_UPF, sendCommand(pages, infoUI, HEALTH_UPF)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(HEALTH_STORAGE, sendCommand(pages, infoUI, HEALTH_STORAGE)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(ACTIVE_ALERTS, Alerts(pages)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(HEALTH_REDIS, RedisStatus(pages)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(COLLECT_KARGO, func() {}), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(SET_DEBUG_LEVEL, SetDebugLevel(pages)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(FLUSH_REDIS, FlushRedis(pages)), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(PLACEHOLDER, func() {}), 0, 1, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 
 	layout := createMainLayout(infoUI, logPanel, afn_tools, pages)
 	pages.AddPage("main", layout, true, true)
@@ -584,6 +597,8 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 }
 
 func main() {
+	// kc, _ := k8s.NewK8sClient()
+	// fmt.Println(kc.GetResourceUsageReport())
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
