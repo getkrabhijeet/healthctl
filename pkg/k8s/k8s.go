@@ -644,6 +644,7 @@ func (kc *K8sClient) GetKargoServiceIP() (string, error) {
 
 	return service.Status.LoadBalancer.Ingress[0].IP, nil
 }
+
 type ResourceUsageReport struct {
 	PodsUsage []PodUsage
 }
@@ -743,3 +744,4 @@ func (kc *K8sClient) GetResourceUsageReport() ResourceUsageReport {
 
 	}
 	return report
+}

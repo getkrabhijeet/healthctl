@@ -112,7 +112,7 @@ func createApplication() (app *tview.Application) {
 	afn_tools.AddItem(CreateNewButton(HEALTH_REDIS, RedisStatus(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(COLLECT_KARGO, CollectKargo(pages)), 0, 1, false)
-  afn_tools.AddItem(tview.NewBox(), 1, 0, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(SET_DEBUG_LEVEL, SetDebugLevel(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(FLUSH_REDIS, FlushRedis(pages)), 0, 1, false)
@@ -693,16 +693,27 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 
 func DisplayResourceUsageReport(pages *tview.Pages) func() {
 	return func() {
+		equalFormatter := func() {
+			log.Printf("────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────")
+		}
 		clearLogPanel(pages)
 		kc, _ := k8s.NewK8sClient()
 		kc.GetResourceUsageReport()
 		r := kc.GetResourceUsageReport()
+
+		// log.Printf("| %s | %s | %s\n", centerText("Pod", 33), centerText("Container", 40), centerText("CPU/Memory", 40))
+
 		for _, res := range r.PodsUsage {
+			equalFormatter()
+			log.Printf("%s", centerText(fmt.Sprint("Pod: ", res.PodName), 140))
+			equalFormatter()
 			for _, containerUsage := range res.ContainerUsages {
-				log.Println("Pod    :", res.PodName)
-				log.Printf("Container: %s", containerUsage.Name)
-				log.Printf("Memory: %s\nCPU   : %s\n", createProgressBarMemory(containerUsage.MemoryUsage, 10), createProgressBarCPU(containerUsage.CPUUsage, 100))
+				log.Printf("%s", centerText(fmt.Sprint("Container: ", containerUsage.Name), 140))
+				log.Printf("| Memory : %s", createProgressBarMemory(containerUsage.MemoryUsage, 10))
+				log.Printf("| CPU : %s", createProgressBarCPU(containerUsage.CPUUsage, 100))
+
 			}
+			equalFormatter()
 		}
 	}
 }
