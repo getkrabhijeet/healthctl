@@ -53,7 +53,7 @@ var HEALTH_REDIS = "Redis status"
 var COLLECT_KARGO = "Collect Kargo"
 var SET_DEBUG_LEVEL = "Set Debug Level"
 var FLUSH_REDIS = "Flush Redis"
-var PLACEHOLDER = "Placeholder"
+var RESOURCE_USAGE = "Resource Usage"
 
 func createApplication() (app *tview.Application) {
 	app = tview.NewApplication()
@@ -112,12 +112,12 @@ func createApplication() (app *tview.Application) {
 	afn_tools.AddItem(CreateNewButton(HEALTH_REDIS, RedisStatus(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(COLLECT_KARGO, CollectKargo(pages)), 0, 1, false)
-  afn_tools.AddItem(tview.NewBox(), 1, 0, false)
+	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(SET_DEBUG_LEVEL, SetDebugLevel(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 	afn_tools.AddItem(CreateNewButton(FLUSH_REDIS, FlushRedis(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
-	afn_tools.AddItem(CreateNewButton(PLACEHOLDER, func() {}), 0, 1, false)
+	afn_tools.AddItem(CreateNewButton(RESOURCE_USAGE, DisplayResourceUsageReport(pages)), 0, 1, false)
 	afn_tools.AddItem(tview.NewBox(), 1, 0, false)
 
 	layout := createMainLayout(infoUI, logPanel, afn_tools, pages)
@@ -691,9 +691,73 @@ func createModalForm(pages *tview.Pages, form tview.Primitive, height int, width
 	return modal
 }
 
+func DisplayResourceUsageReport(pages *tview.Pages) func() {
+	return func() {
+		equalFormatter := func() {
+			log.Printf("────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────")
+		}
+		clearLogPanel(pages)
+		kc, _ := k8s.NewK8sClient()
+		kc.GetResourceUsageReport()
+		r := kc.GetResourceUsageReport()
+
+		// log.Printf("| %s | %s | %s\n", centerText("Pod", 33), centerText("Container", 40), centerText("CPU/Memory", 40))
+
+		for _, res := range r.PodsUsage {
+			equalFormatter()
+			log.Printf("%s", centerText(fmt.Sprint("Pod: ", res.PodName), 140))
+			equalFormatter()
+			for _, containerUsage := range res.ContainerUsages {
+				log.Printf("%s", centerText(fmt.Sprint("Container: ", containerUsage.Name), 140))
+				log.Printf("| Memory : %s", createProgressBarMemory(containerUsage.MemoryUsage, 10))
+				log.Printf("| CPU : %s", createProgressBarCPU(containerUsage.CPUUsage, 100))
+
+			}
+			equalFormatter()
+		}
+	}
+}
+
+func createProgressBarCPU(percentage float64, barLength int) string {
+	// Determine how many blocks to fill based on the percentage
+	filledLength := int((percentage / 100) * float64(barLength))
+
+	// Create the filled part of the bar
+	filledBar := ""
+	for i := 0; i < filledLength; i++ {
+		filledBar += "█"
+	}
+
+	// Create the unfilled part of the bar
+	unfilledBar := ""
+	for i := 0; i < barLength-filledLength; i++ {
+		unfilledBar += " "
+	}
+
+	// Return the combined progress bar string
+	return fmt.Sprintf("[blue]%s[white]%s", filledBar, unfilledBar)
+}
+func createProgressBarMemory(percentage float64, barLength int) string {
+	// Determine how many blocks to fill based on the percentage
+	filledLength := int((percentage / 100) * float64(barLength))
+
+	// Create the filled part of the bar
+	filledBar := ""
+	for i := 0; i < filledLength; i++ {
+		filledBar += "█"
+	}
+
+	// Create the unfilled part of the bar
+	unfilledBar := ""
+	for i := 0; i < barLength-filledLength; i++ {
+		unfilledBar += " "
+	}
+
+	// Return the combined progress bar string
+	return fmt.Sprintf("[orange]%s[white]%s", filledBar, unfilledBar)
+}
+
 func main() {
-	// kc, _ := k8s.NewK8sClient()
-	// fmt.Println(kc.GetResourceUsageReport())
 	app := createApplication()
 
 	if err := app.Run(); err != nil {
